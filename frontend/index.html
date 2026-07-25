@@ -656,8 +656,15 @@
           </div>
         </div>
         <div id="uploadProgress" style="display:none;margin-top:14px">
-          <div style="font-size:13px;color:var(--txt2);margin-bottom:8px">⏳ 正在调用 DeepSeek 视觉模型识别，请稍候…</div>
-          <div style="height:6px;background:var(--line);border-radius:3px;overflow:hidden"><div style="height:100%;width:0;background:linear-gradient(90deg,var(--blue),var(--purple));animation:uploadBar 2s infinite linear"></div></div>
+          <div id="ocrStage" style="font-size:13px;color:var(--txt2);margin-bottom:8px">⏳ 正在浏览器内识别文字，请稍候…</div>
+          <div style="height:6px;background:var(--line);border-radius:3px;overflow:hidden"><div id="ocrBar" style="height:100%;width:0;background:linear-gradient(90deg,var(--blue),var(--purple));transition:width .2s"></div></div>
+        </div>
+        <div style="margin-top:12px;text-align:right">
+          <button class="btn btn-ghost btn-sm" onclick="toggleManual()">无法识别？粘贴文字 →</button>
+        </div>
+        <div id="manualArea" style="display:none;margin-top:10px">
+          <textarea id="ocrManualText" rows="5" placeholder="把截图里的持仓文字粘贴到这里（手机可长按截图→复制文字），系统将自动结构化导入。" style="width:100%;background:var(--panel2);color:var(--txt);border:1px solid var(--line);border-radius:10px;padding:10px;font-size:13px;resize:vertical"></textarea>
+          <button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="doManualUpload()">用文字识别</button>
         </div>
         <div id="ocrResultArea" style="display:none;margin-top:16px">
           <div style="font-size:15px;font-weight:700;margin-bottom:10px">识别结果（已自动导入 <span id="ocrCount">0</span> 条）</div>
@@ -674,6 +681,8 @@
 </style>
 
 <div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.0/dist/tesseract.min.js"></script>
 
 <script>
 /* ---------- view routing ---------- */
@@ -1010,38 +1019,85 @@ const dropZone=document.getElementById('dropZone');
 ['dragleave','drop'].forEach(evt=>{ dropZone.addEventListener(evt,()=>dropZone.classList.remove('dragover'),false); });
 dropZone.addEventListener('drop',(e)=>{ const f=e.dataTransfer.files[0]; if(f){ setSelectedFile(f); } },false);
 
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function toggleManual(){ const m=document.getElementById('manualArea'); m.style.display = m.style.display==='none'?'block':'none'; }
+
+async function runBrowserOcr(file){
+  if(typeof Tesseract==='undefined') throw new Error('OCR 引擎未加载（可能是网络受限），请用下方“粘贴文字”');
+  const res = await Tesseract.recognize(file, 'eng+chi_sim', {
+    logger: m=>{
+      const stage=document.getElementById('ocrStage'); const bar=document.getElementById('ocrBar');
+      if(m.status==='recognizing text'){
+        const p=Math.max(5,Math.round(m.progress*100));
+        bar.style.width=p+'%'; stage.textContent='正在识别文字… '+p+'%';
+      } else {
+        stage.textContent='正在加载 OCR 引擎（首次稍慢，约数秒）…';
+      }
+    }
+  });
+  return res.data.text || '';
+}
+
+function renderOcr(r){
+  state.ocrImported=r.imported||[];
+  document.getElementById('ocrCount').textContent=r.import_count||0;
+  const container=document.getElementById('ocrResults');
+  if(r.holdings && r.holdings.length){
+    container.innerHTML=r.holdings.map((h,i)=>{
+      const imported=state.ocrImported[i];
+      return `<div class="ocr-item">
+        <span><b>${esc(h.name)||'—'}</b> ${h.code?esc(h.code)+' ·':''} ${h.quantity} 份 @ ${fmt(h.cost)}</span>
+        <span class="tag ${imported?'tag-new':'tag-oth'}" style="border-radius:20px">${imported?'已导入':'未导入'}</span>
+      </div>`;
+    }).join('');
+    if(r.note) container.innerHTML+=`<div style="font-size:12px;color:var(--txt3);margin-top:6px">${esc(r.note)}</div>`;
+    if(r.error) container.innerHTML+=`<div style="font-size:12px;color:var(--up)">识别异常：${esc(r.error)}</div>`;
+  }else{
+    let tip='未识别到持仓，可尝试手动添加。';
+    if(r.note) tip+='<br><span style="color:var(--txt3)">'+esc(r.note)+'</span>';
+    if(/截断|无法解析/.test(r.note||'')){
+      tip+='<div style="margin-top:6px;color:var(--gold);font-size:12px">建议：把持仓多的截图拆成几张单独上传，或放大截图后重试。</div>';
+    }
+    if(r.error) tip+=`<div style="font-size:12px;color:var(--up);margin-top:6px">${esc(r.error)}</div>`;
+    container.innerHTML=`<div style="color:var(--txt3);font-size:13px">${tip}</div>`;
+  }
+  document.getElementById('ocrResultArea').style.display='block';
+}
+
 async function doUpload(){
   if(!state.selectedFile){ toast('请先选择图片','error'); return; }
   if(!state.user){ openAuthModal(); return; }
   document.getElementById('uploadBtn').disabled=true;
   document.getElementById('uploadProgress').style.display='block';
+  document.getElementById('ocrBar').style.width='5%';
   try{
-    const fd=new FormData(); fd.append('file',state.selectedFile);
-    const r=await apiForm('POST','/api/upload/ocr',fd);
-    state.ocrImported=r.imported||[];
-    document.getElementById('ocrCount').textContent=r.import_count||0;
-    const container=document.getElementById('ocrResults');
-    if(r.holdings && r.holdings.length){
-      container.innerHTML=r.holdings.map((h,i)=>{
-        const imported=state.ocrImported[i];
-        return `<div class="ocr-item">
-          <span><b>${h.name||'—'}</b> ${h.code?h.code+' ·':''} ${h.quantity} 份 @ ${fmt(h.cost)}</span>
-          <span class="tag ${imported?'tag-new':'tag-oth'}" style="border-radius:20px">${imported?'已导入':'未导入'}</span>
-        </div>`;
-      }).join('');
-      document.getElementById('ocrResultArea').style.display='block';
-      if(r.note) container.innerHTML+=`<div style="font-size:12px;color:var(--txt3);margin-top:6px">${r.note}</div>`;
-      if(r.error) container.innerHTML+=`<div style="font-size:12px;color:var(--up)">识别异常：${r.error}</div>`;
-    }else{
-      container.innerHTML=`<div style="color:var(--txt3);font-size:13px">未识别到持仓，可尝试手动添加。</div>${r.error?'<div style="font-size:12px;color:var(--up);margin-top:6px">'+r.error+'</div>':''}`;
-      document.getElementById('ocrResultArea').style.display='block';
-    }
+    const stage=document.getElementById('ocrStage');
+    stage.textContent='正在加载 OCR 引擎（首次稍慢）…';
+    const text=await runBrowserOcr(state.selectedFile);
+    stage.textContent='已提取文字，正在结构化…';
+    document.getElementById('ocrBar').style.width='90%';
+    if(!text.trim()) throw new Error('未从图片中提取到文字，请尝试“粘贴文字”或换清晰截图');
+    const r=await api('POST','/api/ocr/structure',{text});
+    renderOcr(r);
     document.getElementById('uploadProgress').style.display='none';
     document.getElementById('uploadPreview').style.display='none';
   }catch(err){
     document.getElementById('uploadProgress').style.display='none';
     document.getElementById('uploadBtn').disabled=false;
-    toast('上传失败：'+err.message,'error');
+    toast('识别失败：'+err.message,'error');
+    document.getElementById('manualArea').style.display='block';
+  }
+}
+
+async function doManualUpload(){
+  if(!state.user){ openAuthModal(); return; }
+  const text=document.getElementById('ocrManualText').value.trim();
+  if(!text){ toast('请先粘贴文字','error'); return; }
+  try{
+    const r=await api('POST','/api/ocr/structure',{text});
+    renderOcr(r);
+  }catch(err){
+    toast('识别失败：'+err.message,'error');
   }
 }
 function afterOcrImport(){

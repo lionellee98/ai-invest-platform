@@ -168,6 +168,26 @@ async def upload_ocr(file: UploadFile = File(...), authorization: str = Header(N
             pass
 
 
+class OcrTextReq(BaseModel):
+    text: str
+
+
+@app.post("/api/ocr/structure")
+def ocr_structure(req: OcrTextReq, authorization: str = Header(None)):
+    """接收 OCR 提取出的原始文本，用文本模型结构化为持仓并自动导入。"""
+    user = _get_username(authorization)
+    result = ocr.structure_text(req.text)
+    if result.get("ok"):
+        imported = []
+        for h in result.get("holdings", []):
+            r = users.upsert_by_symbol(user, h)
+            if r.get("ok"):
+                imported.append(r.get("item"))
+        result["imported"] = imported
+        result["import_count"] = len(imported)
+    return result
+
+
 # 挂载前端静态文件（放最后，避免覆盖 /api）
 _FRONT = os.path.join(os.path.dirname(__file__), "..", "frontend")
 if os.path.isdir(_FRONT):
