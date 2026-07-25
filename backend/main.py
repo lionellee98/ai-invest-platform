@@ -18,6 +18,7 @@ import ai_committee
 load_dotenv()
 
 app = FastAPI(title="智投研 AI", version="1.0")
+print(f"[startup] 智投研 AI backend starting; model={os.getenv('DEEPSEEK_MODEL')}")
 app.add_middleware(
     CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"],
 )

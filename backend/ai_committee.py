@@ -17,11 +17,18 @@ from openai import OpenAI
 
 load_dotenv()
 
-_client = OpenAI(
-    api_key=os.getenv("DEEPSEEK_API_KEY"),
-    base_url=os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com"),
-)
-_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash")
+_DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
+_DEEPSEEK_BASE_URL = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
+_DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash")
+
+_client = None
+
+
+def _get_client():
+    global _client
+    if _client is None:
+        _client = OpenAI(api_key=_DEEPSEEK_API_KEY, base_url=_DEEPSEEK_BASE_URL)
+    return _client
 
 SYSTEM = """你是一个专业投研机构的多智能体协调系统。基于给定的【真实客观数据包】，
 模拟 6 位分析师进行多空辩论，再由研究主管裁决，并生成交易计划与风险评估。
@@ -49,8 +56,8 @@ def run_committee(data_pack: dict, name: str, fast: bool = False):
     if fast:
         user += "\n（快速模式：仅需 debate 和 verdict，其余可简略）"
     try:
-        resp = _client.chat.completions.create(
-            model=_MODEL,
+        resp = _get_client().chat.completions.create(
+            model=_DEEPSEEK_MODEL,
             messages=[{"role": "system", "content": SYSTEM},
                       {"role": "user", "content": user}],
             response_format={"type": "json_object"},
