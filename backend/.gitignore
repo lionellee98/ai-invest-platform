@@ -1,0 +1,8 @@
+.env
+__pycache__/
+*.pyc
+.venv/
+*.log
+cache/
+tc_test.py
+uvicorn.log
