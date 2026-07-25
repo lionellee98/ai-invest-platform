@@ -67,7 +67,7 @@ def run_committee(data_pack: dict, name: str, fast: bool = False):
         content = resp.choices[0].message.content
         data = json.loads(content)
         data["ok"] = True
-        data["model"] = _MODEL
+        data["model"] = _DEEPSEEK_MODEL
         return data
     except Exception as e:
         return {"ok": False, "error": str(e)}
