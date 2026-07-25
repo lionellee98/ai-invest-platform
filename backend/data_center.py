@@ -316,7 +316,13 @@ def resolve_fund(query: str):
         res = d["data"]["fundSearchResult"]["results"]
         if res:
             r = res[0]
-            return {"code": r["code"], "name": r["name"], "type": r.get("type", "")}
+            name = r.get("name") or ""
+            # 搜索名等于代码（无有效名称）时，回退反查真实名称
+            if not name or name == r.get("code"):
+                nm = _fund_name_by_code(r["code"])
+                if nm:
+                    name = nm
+            return {"code": r["code"], "name": name or r["code"], "type": r.get("type", "")}
     except Exception:
         pass
     # 2) 备选搜索域名
@@ -327,10 +333,15 @@ def resolve_fund(query: str):
         res = d2["data"]["fundSearchResult"]["results"]
         if res:
             r = res[0]
-            return {"code": r["code"], "name": r["name"], "type": r.get("type", "")}
+            name = r.get("name") or ""
+            if not name or name == r.get("code"):
+                nm = _fund_name_by_code(r["code"])
+                if nm:
+                    name = nm
+            return {"code": r["code"], "name": name or r["code"], "type": r.get("type", "")}
     except Exception:
         pass
-    # 3) 纯 6 位数字：用天天基金净值接口反查名称（极稳，无需特殊 Referer）
+    # 3) 纯 6 位数字：反查名称
     if q.isdigit() and len(q) == 6:
         nm = _fund_name_by_code(q)
         return {"code": q, "name": nm or q, "type": ""}
@@ -338,13 +349,22 @@ def resolve_fund(query: str):
 
 
 def _fund_name_by_code(code: str):
-    """天天基金(gz.1234567)净值接口反查基金名称，纯 6 位代码可用。"""
-    txt = http_text(f"https://fundgz.1234567.com.cn/js/{code}.js",
-                    "utf-8", timeout=10)
+    """东方财富 pingzhongdata 静态文件反查基金名称（fundf10 域名，线上可达）。"""
+    txt = http_text(f"https://fundf10.eastmoney.com/pingzhongdata/{code}.js",
+                    "utf-8", timeout=10, referer=_EM_REF)
     if not txt:
         return None
-    m = re.search(r'name["\s]*:"([^"]+)"', txt)
-    return m.group(1) if m else None
+    m = re.search(r'fS_name\s*=\s*["\']([^"\']+)["\']', txt)
+    if m:
+        return m.group(1)
+    # 兜底：天天基金净值接口
+    txt2 = http_text(f"https://fundgz.1234567.com.cn/js/{code}.js",
+                     "utf-8", timeout=10, referer="https://fund.eastmoney.com/")
+    if txt2:
+        m2 = re.search(r'name["\s]*:"([^"]+)"', txt2)
+        if m2:
+            return m2.group(1)
+    return None
 
 
 def get_fund_holdings(code: str):
