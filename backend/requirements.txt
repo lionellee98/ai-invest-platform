@@ -3,3 +3,5 @@ uvicorn[standard]>=0.27
 openai>=1.40
 python-dotenv>=1.0
 requests>=2.31
+python-multipart>=0.0.7
+pillow>=10.0
