@@ -428,6 +428,17 @@
     <div class="datapack" id="dataPack"></div>
   </div>
 
+  <!-- 基金降级分析面板 -->
+  <div id="fundBanner" style="display:none" class="alert" style="margin-top:18px;background:rgba(232,184,75,.12);border:1px solid rgba(232,184,75,.4)">
+    <div class="ic" style="color:var(--gold)">ℹ️</div>
+    <div><span class="ft" style="font-size:14px;color:var(--txt2)"></span></div>
+  </div>
+  <div id="fundPanel" style="display:none" class="card" style="margin-top:18px">
+    <h4 style="margin-bottom:14px">📁 基金前十大重仓股（降级分析）</h4>
+    <div id="fundHoldings"></div>
+    <div id="fundMetrics" style="margin-top:16px"></div>
+  </div>
+
   <!-- STAGE 2: committee -->
   <div class="sec-title"><span class="num">2</span><h2>AI 投资委员会 · 多空辩论</h2><small>6 派分析师互相攻击</small></div>
   <div class="committee">
@@ -676,6 +687,20 @@
   </div>
 </div>
 
+<!-- 删除二次确认弹窗 -->
+<div class="modal-overlay" id="deleteModal" onclick="closeModal(event)">
+  <div class="modal" onclick="event.stopPropagation()" style="max-width:440px">
+    <div class="modal-hd"><h3 style="color:var(--up)">⚠️ 确认删除持仓</h3><div class="close" onclick="hideModal('deleteModal')">×</div></div>
+    <div class="modal-bd">
+      <p id="deleteModalText" style="color:var(--txt2);font-size:14px;line-height:1.7">确定要删除该持仓吗？此操作不可恢复。</p>
+      <div style="display:flex;gap:12px;margin-top:22px;justify-content:flex-end">
+        <button class="btn btn-ghost" onclick="hideModal('deleteModal')">取消</button>
+        <button class="btn btn-danger" id="deleteConfirmBtn" onclick="confirmDelete()">确认删除</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <style>
   @keyframes uploadBar{0%{width:0;transform:translateX(0)}50%{width:70%;transform:translateX(0)}100%{width:100%;transform:translateX(100%)}}
 </style>
@@ -877,7 +902,7 @@ function renderPortfolio(){
         <td><div class="actions">
           <button class="btn btn-ghost btn-sm" onclick="editItem('${it.id}')">编辑</button>
           <button class="btn btn-warn btn-sm" onclick="openAddPos('${it.id}')">加仓</button>
-          <button class="btn btn-danger btn-sm" onclick="deleteItem('${it.id}')">删除</button>
+          <button class="btn btn-danger btn-sm" onclick="openDeleteConfirm('${it.id}')">删除</button>
         </div></td>
       </tr>`;
     }).join('');
@@ -948,14 +973,31 @@ async function saveItem(e){
   }catch(err){ toast(err.message,'error'); }
   return false;
 }
-async function deleteItem(id){
+let pendingDeleteId=null;
+function openDeleteConfirm(id){
   if(!state.user){ openAuthModal(); return; }
-  if(!confirm('确定删除该持仓？')) return;
+  const item=state.portfolio.find(i=>i.id===id);
+  if(!item) return;
+  pendingDeleteId=id;
+  document.getElementById('deleteModalText').innerHTML=
+    `确定要删除 <b style="color:var(--txt)">${item.name}</b>（${item.code||'—'}）吗？删除后将<b style="color:var(--up)">从账户永久移除且不可恢复</b>，请谨慎操作。`;
+  showModal('deleteModal');
+}
+async function confirmDelete(){
+  if(!pendingDeleteId) return;
+  const btn=document.getElementById('deleteConfirmBtn');
+  btn.disabled=true; btn.textContent='删除中…';
   try{
-    await api('DELETE','/api/portfolio/'+id);
+    await api('DELETE','/api/portfolio/'+pendingDeleteId);
     toast('持仓已删除','success');
-    await loadPortfolio();
-  }catch(err){ toast(err.message,'error'); }
+    hideModal('deleteModal');
+    await loadPortfolio();   // 重新拉取最新列表，确保与后端一致
+  }catch(err){
+    toast('删除失败：'+err.message,'error');
+  }finally{
+    btn.disabled=false; btn.textContent='确认删除';
+    pendingDeleteId=null;
+  }
 }
 
 function openAddPos(id){
@@ -1278,7 +1320,16 @@ async function runPipeline(fast){
 }
 
 function renderReal(data,fast){
-  const A=data.agents||{}, pack=data.data_pack||{}, com=data.committee||{};
+  const com=data.committee||{};
+  // 基金降级分支
+  if(data.kind==='fund' && data.fund){
+    renderFundResult(data,fast,com);
+    return;
+  }
+  document.getElementById('fundBanner').style.display='none';
+  document.getElementById('fundPanel').style.display='none';
+
+  const A=data.agents||{}, pack=data.data_pack||{};
   if(data.symbol)document.getElementById('targetName').textContent=`${data.symbol.name} ${data.symbol.code}`;
   const t=A.technical||{},f=A.fundamental||{},nw=A.news||{},fl=A.fund_flow||{},se=A.sentiment||{};
   const metricSets=[
@@ -1297,6 +1348,12 @@ function renderReal(data,fast){
   });
   document.getElementById('dataPack').innerHTML=jsonColor(pack)+`\n<span style="color:#6b7c9c">// 来源: ${data.source||'AKShare'} · ${data.updated_at||''}</span>`;
 
+  renderCommittee(com, fast);
+  drawKlineReal(t.kline,com.trade_plan);drawRadar();drawOpt();
+  toast('✅ 分析完成 · 数据来自公开数据源，结论由 DeepSeek 生成','success');
+}
+
+function renderCommittee(com, fast){
   const feed=document.getElementById('debateFeed');feed.innerHTML='';
   if(com.ok&&com.debate){
     let buy=0,sell=0,hold=0;
@@ -1347,7 +1404,6 @@ function renderReal(data,fast){
       else if(k.includes('风险收益'))v.textContent=tp.rr_ratio||'—';
     });
   }
-  drawKlineReal(t.kline,com.trade_plan);drawRadar();drawOpt();
 
   if(com.risk){
     const rk=com.risk, lv=rk.risk_level||3;
@@ -1355,7 +1411,46 @@ function renderReal(data,fast){
     const pill=document.querySelector('#analysis .risk-pill .stars');if(pill)pill.textContent=stars;
     const adv=document.querySelectorAll('#analysis .risk-pill')[1];if(adv)adv.innerHTML='建议：'+(rk.advice||'持有');
   }
-  toast('✅ 分析完成 · 数据来自公开数据源，结论由 DeepSeek 生成','success');
+}
+
+function renderFundResult(data,fast,com){
+  const f=data.fund||{};
+  document.getElementById('targetName').textContent=`${data.name} ${data.code}`;
+  const banner=document.getElementById('fundBanner');
+  banner.style.display='flex';
+  banner.querySelector('.ft').innerHTML=`基金 <b style="color:var(--txt)">${data.name}（${data.code}）</b> 无实时行情，已自动降级为 <b style="color:var(--gold)">前十大重仓股分析</b> · 来源：${f.source||'东方财富 fundf10'}`;
+  const panel=document.getElementById('fundPanel'); panel.style.display='block';
+
+  const holdings=(f.holdings||[]).map((h,i)=>{
+    const pe=(h.pe!=null&&h.pe!=='')?h.pe:'—';
+    const pb=(h.pb!=null&&h.pb!=='')?h.pb:'—';
+    return `<tr><td>${i+1}</td><td><b>${h.name}</b><br><span style="color:var(--txt3);font-size:12px">${h.code}</span></td><td>${h.industry||'—'}</td><td>${h.pct}%</td><td>${pe}</td><td>${pb}</td></tr>`;
+  }).join('');
+  document.getElementById('fundHoldings').innerHTML=`<table style="width:100%;border-collapse:collapse;font-size:13.5px">
+    <thead><tr style="color:var(--txt3);text-align:left"><th style="padding:8px 6px">#</th><th style="padding:8px 6px">重仓股</th><th style="padding:8px 6px">行业</th><th style="padding:8px 6px">占净值</th><th style="padding:8px 6px">PE</th><th style="padding:8px 6px">PB</th></tr></thead>
+    <tbody>${holdings||'<tr><td colspan=6 style="padding:12px;color:var(--txt3)">暂无可展示的重仓股</td></tr>'}</tbody></table>`;
+
+  const m=f.metrics||{};
+  const indTxt=(m.industry_dist||[]).map(d=>`${d.name} ${d.pct}%`).join(' · ')||'—';
+  document.getElementById('fundMetrics').innerHTML=`
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px">
+      <div style="background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px"><span style="font-size:12px;color:var(--txt3)">前3集中度</span><b style="display:block;font-size:18px;margin-top:4px">${m.top3_pct!=null?m.top3_pct+'%':'—'}</b></div>
+      <div style="background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px"><span style="font-size:12px;color:var(--txt3)">前10集中度</span><b style="display:block;font-size:18px;margin-top:4px">${m.top10_pct!=null?m.top10_pct+'%':'—'}</b></div>
+      <div style="background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px"><span style="font-size:12px;color:var(--txt3)">HHI</span><b style="display:block;font-size:18px;margin-top:4px">${m.hhi!=null?m.hhi:'—'}</b></div>
+      <div style="background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px"><span style="font-size:12px;color:var(--txt3)">平均PE</span><b style="display:block;font-size:18px;margin-top:4px">${m.avg_pe!=null?m.avg_pe:'—'}</b></div>
+      <div style="background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px"><span style="font-size:12px;color:var(--txt3)">平均PB</span><b style="display:block;font-size:18px;margin-top:4px">${m.avg_pb!=null?m.avg_pb:'—'}</b></div>
+      <div style="background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px"><span style="font-size:12px;color:var(--txt3)">集中度评级</span><b style="display:block;font-size:18px;margin-top:4px;color:var(--gold)">${m.concentration||'—'}</b></div>
+    </div>
+    <div style="margin-top:12px;font-size:13px;color:var(--txt2)"><b>行业分布：</b>${indTxt}</div>`;
+
+  const ag=document.getElementById('agentGrid');
+  const steps=[['重仓股采集',`前${f.holdings?f.holdings.length:0}大重仓`],['行业分布',(m.industry_dist||[]).slice(0,2).map(d=>d.name).join('/')||'—'],['估值分析',`PE ${m.avg_pe!=null?m.avg_pe:'—'}`],['集中度',m.concentration||'—'],['AI 研判','DeepSeek']];
+  ag.innerHTML=steps.map((s,i)=>`<div class="agent"><div class="status" style="color:var(--down)">✓ 完成</div><div class="ic" style="background:rgba(160,113,255,.15)">📁</div><h4>阶段 ${i+1} · ${s[0]}</h4><div class="metrics"><div><span>${s[0]}</span><b>${s[1]}</b></div></div><div class="prog"><i style="width:100%"></i></div></div>`).join('');
+  document.getElementById('dataPack').innerHTML=jsonColor(m)+`\n<span style="color:#6b7c9c">// 来源: ${f.source||''} · ${f.updated_at||''}</span>`;
+
+  renderCommittee(com, fast);
+  drawRadar();drawOpt();drawKline();
+  toast('✅ 基金降级分析完成（基于前十大重仓股）','success');
 }
 
 function jsonColor(obj){

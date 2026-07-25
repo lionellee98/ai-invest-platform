@@ -287,6 +287,149 @@ def collect_all(query: str):
     }
 
 
+# ------------------------------------------------------------ 基金（降级分析）
+def _em_secid(code: str) -> str:
+    """东方财富 secid：沪市 1. 深市 0. 前缀。"""
+    return ("1." if str(code).startswith("6") else "0.") + str(code)
+
+
+def resolve_fund(query: str):
+    """东方财富基金搜索，返回 {code,name,type}。找不到返回 None。"""
+    q = (query or "").strip()
+    if not q:
+        return None
+    # 1) 东方财富基金搜索
+    url = ("https://fundsuggest.eastmoney.com/FundSearch/api/FundSearch/GSGQSearch?keyword="
+           + urllib.parse.quote(q))
+    d = http_json(url, timeout=10)
+    try:
+        res = d["data"]["fundSearchResult"]["results"]
+        if res:
+            r = res[0]
+            return {"code": r["code"], "name": r["name"], "type": r.get("type", "")}
+    except Exception:
+        pass
+    # 2) 纯 6 位数字按基金代码尝试
+    if q.isdigit() and len(q) == 6:
+        return {"code": q, "name": q, "type": ""}
+    return None
+
+
+def get_fund_holdings(code: str):
+    """东方财富 fundf10 前十大重仓股。返回 {ok,date,holdings:[{code,name,pct}]}。"""
+    out = {"ok": False, "holdings": [], "date": ""}
+    url = f"https://fundf10.eastmoney.com/FundArchivesDatas.aspx?type=jjcc&code={code}&topline=10"
+    txt = http_text(url, "utf-8", timeout=12)
+    if not txt:
+        return out
+    m = re.search(r'content:"(.*?)"\s*,\s*arryear', txt, re.S) or re.search(r'content:"(.*?)"', txt, re.S)
+    if not m:
+        return out
+    content = m.group(1).replace('\\"', '"').replace("\\/", "/")
+    rows = re.findall(r"<tr>(.*?)</tr>", content, re.S)
+    holdings = []
+    for row in rows:
+        if "股票代码" in row or "序号" in row or "股票名称" in row:
+            continue
+        code_m = re.search(r">(\d{6})</a>", row)
+        if not code_m:
+            continue
+        code = code_m.group(1)
+        name = None
+        for a in re.findall(r">([^<]+)</a>", row):
+            a = a.strip()
+            if re.fullmatch(r"\d{6}", a):
+                continue
+            if a and not a.isdigit():
+                name = a
+                break
+        pct_m = re.search(r"([\d.]+)%", row)
+        if code and name and pct_m:
+            holdings.append({"code": code, "name": name, "pct": float(pct_m.group(1))})
+    if holdings:
+        out["ok"] = True
+        out["holdings"] = holdings[:10]
+        dm = re.search(r"curyear[:\s]*\"?(\d{4})", txt)
+        if dm:
+            out["date"] = dm.group(1)
+    return out
+
+
+def get_stock_industry(secid_em: str):
+    """东方财富个股行业（f127）。"""
+    d = http_json(
+        f"https://push2.eastmoney.com/api/qt/stock/get?secid={secid_em}&fields=f57,f58,f127",
+        timeout=8)
+    try:
+        return d["data"].get("f127") or ""
+    except Exception:
+        return ""
+
+
+def collect_fund_analysis(query: str):
+    """
+    基金降级分析：解析基金 → 取前十大重仓股 → 逐个补充行业/估值 → 计算集中度与行业分布。
+    返回 {ok, name, code, date, holdings, metrics, fund_pack, source, updated_at}。
+    """
+    fnd = resolve_fund(query)
+    if not fnd:
+        return {"ok": False, "error": "未找到对应基金（请确认代码或名称是否正确）"}
+    code, name = fnd["code"], fnd["name"]
+    h = get_fund_holdings(code)
+    if not h.get("ok") or not h["holdings"]:
+        return {"ok": False,
+                "error": "该基金前十大重仓股数据暂不可用（公开数据源限流），请稍后重试",
+                "source_note": "东方财富 fundf10 接口"}
+    holdings = h["holdings"]
+    for it in holdings:
+        try:
+            sec = _em_secid(it["code"])
+            q = _quote(("sh" if it["code"].startswith("6") else "sz") + it["code"])
+            it["pe"] = (q or {}).get("pe")
+            it["pb"] = (q or {}).get("pb")
+            it["industry"] = get_stock_industry(sec) or "—"
+        except Exception:
+            it.setdefault("pe", None)
+            it.setdefault("pb", None)
+            it.setdefault("industry", "—")
+
+    # 行业分布（按占净值加权）
+    ind_map = {}
+    for it in holdings:
+        ind_map[it.get("industry", "—")] = ind_map.get(it.get("industry", "—"), 0) + it["pct"]
+    ind_dist = [{"name": k, "pct": round(v, 2)}
+                for k, v in sorted(ind_map.items(), key=lambda x: -x[1])]
+
+    top3 = round(sum(it["pct"] for it in holdings[:3]), 2)
+    top10 = round(min(sum(it["pct"] for it in holdings), 100), 2)
+    hhi = round(sum((it["pct"] / 100) ** 2 for it in holdings), 4)
+    pes = [it["pe"] for it in holdings if it.get("pe") is not None]
+    pbs = [it["pb"] for it in holdings if it.get("pb") is not None]
+    avg_pe = round(sum(pes) / len(pes), 1) if pes else None
+    avg_pb = round(sum(pbs) / len(pbs), 2) if pbs else None
+    concentration = "高" if top3 >= 40 else ("中" if top3 >= 25 else "低")
+
+    metrics = {
+        "count": len(holdings), "top3_pct": top3, "top10_pct": top10, "hhi": hhi,
+        "industry_dist": ind_dist, "avg_pe": avg_pe, "avg_pb": avg_pb,
+        "concentration": concentration,
+    }
+    fund_pack = {
+        "name": name, "code": code, "holdings_count": len(holdings),
+        "top3_pct": top3, "top10_pct": top10, "hhi": hhi,
+        "industry_dist": ind_dist, "avg_pe": avg_pe, "avg_pb": avg_pb,
+        "holdings": [{"name": it["name"], "code": it["code"], "pct": it["pct"],
+                      "industry": it.get("industry", "—"),
+                      "pe": it.get("pe"), "pb": it.get("pb")} for it in holdings],
+    }
+    return {
+        "ok": True, "name": name, "code": code, "date": h.get("date"),
+        "holdings": holdings, "metrics": metrics, "fund_pack": fund_pack,
+        "source": "东方财富 fundf10 前十大重仓股（公开数据，仅供研究）",
+        "updated_at": _dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    }
+
+
 def _fmt_money(x):
     try:
         v = float(x)

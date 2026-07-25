@@ -93,14 +93,35 @@ def quote(query: str):
 
 @app.post("/api/analyze")
 def analyze(req: AnalyzeReq):
-    """完整六阶段：真实数据 + DeepSeek 委员会。"""
-    data = data_center.collect_all(req.query)
-    if not data.get("ok"):
-        return JSONResponse(data, status_code=404)
-    name = data["symbol"]["name"]
-    committee = ai_committee.run_committee(data["data_pack"], name, fast=req.fast)
-    data["committee"] = committee
-    return JSONResponse(data)
+    """完整分析：股票/ETF 走六阶段真实数据；基金自动降级为前十大重仓股分析。"""
+    sym = data_center.resolve_symbol(req.query)
+    if sym:
+        data = data_center.collect_all(req.query)
+        # 只有拿到真实行情价才走股票六阶段；否则（如场外基金）降级
+        if data.get("ok") and data["data_pack"].get("price"):
+            name = data["symbol"]["name"]
+            committee = ai_committee.run_committee(data["data_pack"], name, fast=req.fast)
+            data["committee"] = committee
+            return JSONResponse(data)
+    # 基金降级分析
+    fnd = data_center.collect_fund_analysis(req.query)
+    if fnd.get("ok"):
+        committee = ai_committee.run_fund_committee(fnd["fund_pack"], fnd["name"], fast=req.fast)
+        return JSONResponse({
+            "ok": True, "degraded": True, "kind": "fund",
+            "name": fnd["name"], "code": fnd["code"],
+            "fund": {
+                "date": fnd.get("date"), "holdings": fnd["holdings"],
+                "metrics": fnd["metrics"], "source": fnd.get("source"),
+                "updated_at": fnd.get("updated_at"),
+            },
+            "committee": committee,
+        })
+    return JSONResponse({
+        "ok": False,
+        "error": "未能获取该标的的分析数据。若为基金，前十大重仓股接口可能暂不可用（公开数据源限流），请稍后重试；若为股票，请确认代码/名称正确。",
+        "hint": "支持：股票/ETF 代码或名称、公募基金代码或名称（自动降级分析重仓股）",
+    }, status_code=404)
 
 
 @app.post("/api/auth/register")
