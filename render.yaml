@@ -1,0 +1,19 @@
+# Render 部署配置（基础设施即代码）
+# 在 Render 控制台 New + → Blueprint → 关联本仓库即可一键部署。
+services:
+  - type: web
+    name: ai-invest-platform
+    runtime: docker
+    region: singapore          # 离国内数据源更近，行情/接口延迟更低
+    plan: free                 # 免费套餐；15 分钟无访问会休眠，首次唤醒约 30s
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    envVars:
+      - key: DEEPSEEK_API_KEY  # 务必在 Render 控制台手动填写你的真实 Key
+        sync: false
+      - key: DEEPSEEK_BASE_URL
+        value: https://api.deepseek.com
+      - key: DEEPSEEK_MODEL
+        value: deepseek-v4-flash
+      - key: HOST
+        value: 0.0.0.0
