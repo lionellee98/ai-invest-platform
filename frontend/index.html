@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>智投研 AI · 多智能体投资分析平台</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+<style>
+  :root{
+    --bg:#0a0e17; --bg2:#0f1524; --panel:#131a2b; --panel2:#182135;
+    --line:#22304d; --line2:#2c3d5f;
+    --txt:#e7edf7; --txt2:#9fb0cc; --txt3:#6b7c9c;
+    --up:#ff4d4f; --up-soft:rgba(255,77,79,.14);
+    --down:#16c784; --down-soft:rgba(22,199,132,.14);
+    --gold:#e8b84b; --blue:#4d8dff; --purple:#a071ff; --cyan:#2fd4d4;
+    --shadow:0 10px 40px rgba(0,0,0,.45);
+    --r:16px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    font-family:"PingFang SC","Microsoft YaHei","Segoe UI",system-ui,sans-serif;
+    background:
+      radial-gradient(1200px 600px at 80% -10%, rgba(77,141,255,.10), transparent 60%),
+      radial-gradient(900px 500px at 0% 100%, rgba(160,113,255,.08), transparent 55%),
+      var(--bg);
+    color:var(--txt); line-height:1.5; overflow-x:hidden;
+  }
+  ::-webkit-scrollbar{width:10px;height:10px}
+  ::-webkit-scrollbar-thumb{background:#243350;border-radius:8px}
+  ::-webkit-scrollbar-track{background:transparent}
+  a{color:inherit;text-decoration:none}
+
+  /* ===== Top Nav ===== */
+  .nav{position:sticky;top:0;z-index:50;display:flex;align-items:center;gap:28px;
+    padding:14px 30px;background:rgba(10,14,23,.82);backdrop-filter:blur(14px);
+    border-bottom:1px solid var(--line)}
+  .logo{display:flex;align-items:center;gap:11px;font-weight:800;font-size:19px;letter-spacing:.5px}
+  .logo .mark{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;
+    background:linear-gradient(135deg,var(--blue),var(--purple));font-size:18px;box-shadow:0 6px 18px rgba(77,141,255,.4)}
+  .logo b{background:linear-gradient(90deg,#fff,#9fb0cc);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .navlinks{display:flex;gap:6px;margin-left:10px}
+  .navlinks a{padding:8px 15px;border-radius:10px;color:var(--txt2);font-size:14.5px;font-weight:600;cursor:pointer;transition:.18s}
+  .navlinks a:hover{color:var(--txt);background:var(--panel)}
+  .navlinks a.active{color:#fff;background:linear-gradient(135deg,rgba(77,141,255,.22),rgba(160,113,255,.18));border:1px solid var(--line2)}
+  .nav-right{margin-left:auto;display:flex;align-items:center;gap:14px}
+  .badge-live{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--txt2);
+    padding:6px 12px;border:1px solid var(--line);border-radius:20px;background:var(--panel)}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--down);box-shadow:0 0 0 4px var(--down-soft);animation:pulse 1.8s infinite}
+  @keyframes pulse{50%{opacity:.4}}
+  .btn{padding:9px 18px;border-radius:11px;font-weight:700;font-size:14px;cursor:pointer;border:none;transition:.18s}
+  .btn-primary{background:linear-gradient(135deg,var(--blue),var(--purple));color:#fff;box-shadow:0 8px 22px rgba(77,141,255,.35)}
+  .btn-primary:hover{transform:translateY(-1px);box-shadow:0 12px 28px rgba(77,141,255,.5)}
+  .btn-ghost{background:var(--panel);color:var(--txt);border:1px solid var(--line2)}
+  .btn-ghost:hover{background:var(--panel2)}
+
+  .wrap{max-width:1240px;margin:0 auto;padding:34px 30px 80px}
+  .view{display:none;animation:fade .5s ease}
+  .view.active{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+
+  .kicker{display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:var(--blue);
+    background:rgba(77,141,255,.1);border:1px solid rgba(77,141,255,.25);padding:6px 13px;border-radius:20px}
+  h1.hero{font-size:46px;font-weight:900;line-height:1.15;margin:20px 0 16px;letter-spacing:-.5px}
+  h1.hero span{background:linear-gradient(90deg,var(--blue),var(--purple),var(--cyan));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .hero-sub{font-size:18px;color:var(--txt2);max-width:640px}
+  .hero-sub b{color:var(--txt)}
+
+  /* ===== Cards ===== */
+  .grid{display:grid;gap:20px}
+  .g3{grid-template-columns:repeat(3,1fr)}
+  .g2{grid-template-columns:repeat(2,1fr)}
+  .card{background:linear-gradient(180deg,var(--panel),var(--bg2));border:1px solid var(--line);
+    border-radius:var(--r);padding:22px;box-shadow:var(--shadow)}
+  .card.hoverable{cursor:pointer;transition:.2s}
+  .card.hoverable:hover{transform:translateY(-4px);border-color:var(--line2);box-shadow:0 18px 46px rgba(0,0,0,.55)}
+  .entry-ic{width:52px;height:52px;border-radius:14px;display:grid;place-items:center;font-size:24px;margin-bottom:16px}
+  .entry h3{font-size:19px;margin-bottom:8px}
+  .entry p{color:var(--txt2);font-size:14px}
+  .entry .arrow{margin-top:16px;color:var(--blue);font-weight:700;font-size:14px;display:flex;align-items:center;gap:6px}
+
+  .sec-title{display:flex;align-items:center;gap:12px;margin:52px 0 22px}
+  .sec-title h2{font-size:26px;font-weight:800}
+  .sec-title .num{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;font-weight:800;
+    background:linear-gradient(135deg,rgba(77,141,255,.25),rgba(160,113,255,.2));border:1px solid var(--line2);color:#fff}
+  .sec-title small{color:var(--txt3);font-size:14px;margin-left:auto;font-weight:500}
+
+  /* pipeline strip */
+  .pipe{display:grid;grid-template-columns:repeat(6,1fr);gap:14px;position:relative}
+  .stage{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 16px;position:relative;overflow:hidden}
+  .stage .st-n{font-size:12px;color:var(--txt3);font-weight:700}
+  .stage h4{font-size:15px;margin:8px 0 6px}
+  .stage p{font-size:12.5px;color:var(--txt2)}
+  .stage .bar{position:absolute;left:0;top:0;height:3px;width:100%;background:linear-gradient(90deg,var(--blue),var(--purple))}
+
+  /* KPI */
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+  .kpi{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px}
+  .kpi .lbl{font-size:13px;color:var(--txt2)}
+  .kpi .val{font-size:26px;font-weight:800;margin-top:6px}
+  .kpi .sub{font-size:12.5px;margin-top:4px;color:var(--txt3)}
+  .up{color:var(--up)} .down{color:var(--down)}
+
+  /* table */
+  table{width:100%;border-collapse:collapse}
+  th{text-align:left;font-size:12.5px;color:var(--txt3);font-weight:600;padding:12px 14px;border-bottom:1px solid var(--line)}
+  td{padding:14px;border-bottom:1px solid var(--line);font-size:14px}
+  tr:last-child td{border-bottom:none}
+  tbody tr:hover{background:var(--panel2)}
+  .tag{display:inline-block;font-size:12px;font-weight:700;padding:3px 10px;border-radius:8px}
+  .tag-tech{background:rgba(77,141,255,.15);color:#7fb0ff}
+  .tag-cons{background:rgba(232,184,75,.15);color:var(--gold)}
+  .tag-new{background:rgba(22,199,132,.15);color:#4fe0a8}
+  .tag-med{background:rgba(160,113,255,.15);color:#b795ff}
+  .tag-bank{background:rgba(47,212,212,.15);color:#5ee0e0}
+
+  /* chart box */
+  .chart{width:100%;height:300px}
+  .chart-sm{width:100%;height:250px}
+
+  /* debate */
+  .committee{display:grid;grid-template-columns:1.4fr 1fr;gap:20px}
+  .debate-feed{display:flex;flex-direction:column;gap:14px;max-height:520px;overflow-y:auto;padding-right:8px}
+  .msg{display:flex;gap:12px;opacity:0;transform:translateY(12px);animation:msgin .5s forwards}
+  @keyframes msgin{to{opacity:1;transform:none}}
+  .msg .av{width:42px;height:42px;border-radius:11px;display:grid;place-items:center;font-size:19px;flex-shrink:0;font-weight:800}
+  .msg .body{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:11px 14px;flex:1}
+  .msg .role{font-size:13px;font-weight:800;margin-bottom:3px}
+  .msg .txt{font-size:13.5px;color:var(--txt);line-height:1.55}
+  .msg .stance{font-size:11px;font-weight:700;padding:2px 8px;border-radius:6px;margin-left:8px}
+  .s-buy{background:var(--up-soft);color:var(--up)}
+  .s-sell{background:var(--down-soft);color:var(--down)}
+  .s-hold{background:rgba(232,184,75,.15);color:var(--gold)}
+
+  .verdict{border-radius:14px;padding:22px;text-align:center;border:1px solid var(--line2);background:linear-gradient(180deg,var(--panel2),var(--panel))}
+  .verdict .big{font-size:44px;font-weight:900;letter-spacing:1px;margin:6px 0}
+  .conf-ring{margin:10px auto}
+
+  .plan-row{display:flex;justify-content:space-between;align-items:center;padding:13px 0;border-bottom:1px dashed var(--line)}
+  .plan-row:last-child{border:none}
+  .plan-row .k{color:var(--txt2);font-size:14px}
+  .plan-row .v{font-weight:800;font-size:15px}
+  .batch{display:flex;gap:10px;margin-top:6px}
+  .batch .b{flex:1;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px;text-align:center}
+  .batch .b .p{font-size:22px;font-weight:900;color:var(--blue)}
+  .batch .b .l{font-size:12px;color:var(--txt2);margin-top:3px}
+
+  .stars{color:var(--gold);font-size:22px;letter-spacing:3px}
+  .risk-pill{display:inline-flex;align-items:center;gap:8px;padding:8px 15px;border-radius:11px;font-weight:800;font-size:15px}
+
+  .datapack{background:#0b1220;border:1px solid var(--line);border-radius:12px;padding:16px;font-family:"JetBrains Mono",Consolas,monospace;font-size:13px;color:#8fd6b0;overflow:auto}
+  .datapack .k{color:#7fb0ff} .datapack .n{color:var(--gold)} .datapack .s{color:#4fe0a8}
+
+  .agent-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:14px}
+  .agent{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;position:relative;overflow:hidden}
+  .agent .ic{width:40px;height:40px;border-radius:11px;display:grid;place-items:center;font-size:19px;margin-bottom:10px}
+  .agent h4{font-size:14.5px;margin-bottom:8px}
+  .agent .metrics{display:flex;flex-direction:column;gap:5px}
+  .agent .metrics div{display:flex;justify-content:space-between;font-size:12.5px;color:var(--txt2)}
+  .agent .metrics b{color:var(--txt);font-weight:700}
+  .agent .status{position:absolute;top:14px;right:14px;font-size:11px;color:var(--down);font-weight:700}
+  .agent .prog{height:4px;border-radius:4px;background:var(--line);margin-top:12px;overflow:hidden}
+  .agent .prog i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--blue),var(--purple));transition:width 1.2s ease}
+
+  .alert{display:flex;gap:12px;align-items:flex-start;background:rgba(255,77,79,.08);border:1px solid rgba(255,77,79,.3);
+    border-radius:12px;padding:14px 16px}
+  .alert.warn{background:rgba(232,184,75,.08);border-color:rgba(232,184,75,.3)}
+  .alert .ic{font-size:20px}
+  .alert h4{font-size:14.5px;margin-bottom:3px}
+  .alert p{font-size:13px;color:var(--txt2)}
+
+  .modes{display:grid;grid-template-columns:repeat(5,1fr);gap:14px}
+  .mode{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 16px;cursor:pointer;transition:.18s}
+  .mode:hover{border-color:var(--blue);transform:translateY(-3px)}
+  .mode .ic{font-size:24px} .mode h4{font-size:15px;margin:10px 0 6px}
+  .mode p{font-size:12.5px;color:var(--txt2)} .mode .t{font-size:12px;color:var(--blue);margin-top:10px;font-weight:700}
+
+  .search-box{display:flex;gap:12px;background:var(--panel);border:1px solid var(--line2);border-radius:14px;padding:8px;margin:24px 0}
+  .search-box input{flex:1;background:transparent;border:none;color:var(--txt);font-size:16px;padding:10px 14px;outline:none}
+  .search-box input::placeholder{color:var(--txt3)}
+  .form-row{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:16px}
+  .form-row label{font-size:13px;color:var(--txt2);display:block;margin-bottom:6px}
+  .form-row input,.form-row select{width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:10px;color:var(--txt);padding:10px 12px;font-size:14px;outline:none}
+
+  .review-item{display:flex;gap:16px;padding:16px;border:1px solid var(--line);border-radius:12px;background:var(--panel);align-items:center}
+  .review-item .res{width:56px;height:56px;border-radius:12px;display:grid;place-items:center;font-size:22px;font-weight:800;flex-shrink:0}
+  .review-item .win{background:var(--up-soft);color:var(--up)}
+  .review-item .lose{background:var(--down-soft);color:var(--down)}
+
+  .footer{border-top:1px solid var(--line);padding:26px 30px;color:var(--txt3);font-size:13px;text-align:center;line-height:1.9}
+  .footer b{color:var(--txt2)}
+
+  .drop{border:2px dashed var(--line2);border-radius:16px;padding:40px;text-align:center;background:var(--panel);transition:.2s;cursor:pointer}
+  .drop:hover{border-color:var(--blue);background:var(--panel2)}
+  .drop .ic{font-size:44px}
+  .broker-logos{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:18px}
+  .broker-logos span{font-size:12.5px;color:var(--txt2);background:var(--panel2);border:1px solid var(--line);padding:6px 12px;border-radius:20px}
+
+  .toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%) translateY(120px);background:var(--panel2);
+    border:1px solid var(--line2);border-radius:12px;padding:14px 22px;box-shadow:var(--shadow);z-index:100;transition:.4s;font-size:14px;font-weight:600}
+  .toast.show{transform:translateX(-50%) translateY(0)}
+
+  @media(max-width:980px){
+    .g3,.g2,.pipe,.kpis,.agent-grid,.modes,.committee,.form-row{grid-template-columns:1fr}
+    h1.hero{font-size:34px} .navlinks{display:none}
+    .wrap{padding:24px 18px 60px}
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ NAV ============ -->
+<nav class="nav">
+  <div class="logo"><span class="mark">📊</span> <span>智投研 <b>AI</b></span></div>
+  <div class="navlinks">
+    <a data-view="home" class="active">首页</a>
+    <a data-view="portfolio">我的组合</a>
+    <a data-view="analysis">AI 分析</a>
+    <a data-view="review">复盘中心</a>
+    <a data-view="coach">持仓教练</a>
+  </div>
+  <div class="nav-right">
+    <div class="badge-live"><span class="dot"></span> 6 智能体在线</div>
+    <button class="btn btn-primary" onclick="go('analysis');runPipeline()">⚡ 开始分析</button>
+  </div>
+</nav>
+
+<!-- ============ HOME ============ -->
+<section class="view active" id="home">
+<div class="wrap">
+  <div class="kicker">🤖 多智能体协同 · 模拟专业投研团队</div>
+  <h1 class="hero">不是一个 AI 给答案,<br>而是<span>一整支 AI 投研团队</span>为你工作</h1>
+  <p class="hero-sub">技术、基本面、新闻、资金、情绪 5 位分析师并行采集数据,经<b>投资委员会多空辩论</b>、<b>交易委员会</b>制定计划、<b>风险委员会</b>评级,最终给出可解释的 <b>买入/卖出/持有</b> 结论——而不是一句模糊的"建议买"。</p>
+
+  <div class="grid g3" style="margin-top:36px">
+    <div class="card entry hoverable" onclick="go('portfolio')">
+      <div class="entry-ic" style="background:rgba(77,141,255,.15)">📸</div>
+      <h3>上传持仓</h3>
+      <p>上传支付宝、天天基金、同花顺、东方财富、雪球、富途等截图,AI 自动 OCR 识别基金/股票名称、金额、时间与收益,一键生成投资组合。</p>
+      <div class="arrow">立即上传 →</div>
+    </div>
+    <div class="card entry hoverable" onclick="go('search')">
+      <div class="entry-ic" style="background:rgba(232,184,75,.15)">🔍</div>
+      <h3>搜索分析</h3>
+      <p>输入"贵州茅台"或"易方达蓝筹精选",填写买入时间与金额,自动反推买入净值、份额、当前收益率,并启动完整 AI 分析。</p>
+      <div class="arrow">搜索标的 →</div>
+    </div>
+    <div class="card entry hoverable" onclick="go('portfolio')">
+      <div class="entry-ic" style="background:rgba(22,199,132,.15)">🧭</div>
+      <h3>我的组合</h3>
+      <p>管理多个基金 + 股票 + ETF,AI 自动诊断行业集中度、风险暴露与相关性,判断你的组合是否过度集中。</p>
+      <div class="arrow">查看组合 →</div>
+    </div>
+  </div>
+
+  <!-- pipeline -->
+  <div class="sec-title"><span class="num">⚙</span><h2>六阶段 AI 投研流水线</h2><small>Data Center → 投资委员会 → 交易 → 风险 → 组合优化 → 复盘</small></div>
+  <div class="pipe">
+    <div class="stage"><div class="bar"></div><div class="st-n">STAGE 1</div><h4>数据采集中心</h4><p>5 个 Agent 并行采集技术/基本面/新闻/资金/情绪数据</p></div>
+    <div class="stage"><div class="bar"></div><div class="st-n">STAGE 2</div><h4>投资委员会</h4><p>6 派分析师多空辩论,研究主管拍板结论</p></div>
+    <div class="stage"><div class="bar"></div><div class="st-n">STAGE 3</div><h4>交易计划</h4><p>分批建仓、止盈止损、Kelly 仓位与风险收益比</p></div>
+    <div class="stage"><div class="bar"></div><div class="st-n">STAGE 4</div><h4>风险委员会</h4><p>激进/保守/中性博弈,输出风险等级与操作建议</p></div>
+    <div class="stage"><div class="bar"></div><div class="st-n">STAGE 5</div><h4>组合优化</h4><p>诊断行业集中度,给出资产配置再平衡方案</p></div>
+    <div class="stage"><div class="bar"></div><div class="st-n">STAGE 6</div><h4>复盘中心</h4><p>每晚自动复盘昨日结论,持续优化 Prompt 提升准确率</p></div>
+  </div>
+
+  <!-- modes -->
+  <div class="sec-title"><span class="num">◎</span><h2>五种分析模式</h2><small>按需选择速度与深度</small></div>
+  <div class="modes">
+    <div class="mode" onclick="go('analysis');runPipeline()"><div class="ic">📑</div><h4>完整分析</h4><p>跑完六阶段全流程,输出完整 PDF 研报</p><div class="t">耗时 2~5 分钟</div></div>
+    <div class="mode" onclick="go('analysis');runPipeline(true)"><div class="ic">⚡</div><h4>快速分析</h4><p>仅跑技术 + 新闻 + 资金三项</p><div class="t">约 30 秒</div></div>
+    <div class="mode" onclick="go('portfolio')"><div class="ic">🩺</div><h4>持仓诊断</h4><p>针对已有仓位判断是否该卖</p><div class="t">针对性诊断</div></div>
+    <div class="mode" onclick="go('coach')"><div class="ic">🛡️</div><h4>风险扫描</h4><p>扫描整个账户,标出高风险仓位</p><div class="t">全账户</div></div>
+    <div class="mode" onclick="go('analysis');runPipeline(true)"><div class="ic">🎯</div><h4>单点分析</h4><p>只看 MACD 或只分析财报</p><div class="t">单指标</div></div>
+  </div>
+
+  <!-- compliance -->
+  <div class="sec-title"><span class="num">§</span><h2>合规与风险设计</h2><small>面向公众的必备原则</small></div>
+  <div class="grid g3">
+    <div class="card"><h4 style="color:var(--blue)">🎯 定位为辅助工具</h4><p style="color:var(--txt2);font-size:13.5px;margin-top:8px">帮助理解市场信息与风险,不替代用户做投资决策。</p></div>
+    <div class="card"><h4 style="color:var(--gold)">🔬 区分事实与推断</h4><p style="color:var(--txt2);font-size:13.5px;margin-top:8px">客观数据(行情/财报/净值)与 AI 分析、概率判断分开展示。</p></div>
+    <div class="card"><h4 style="color:var(--down)">🔒 隐私脱敏</h4><p style="color:var(--txt2);font-size:13.5px;margin-top:8px">上传截图自动隐去账号/姓名,支持随时删除上传数据。</p></div>
+  </div>
+</div>
+</section>
+
+<!-- ============ SEARCH ============ -->
+<section class="view" id="search">
+<div class="wrap">
+  <div class="kicker">🔍 搜索分析</div>
+  <h1 class="hero" style="font-size:34px">搜索单只标的并<span>自动反推收益</span></h1>
+  <div class="search-box">
+    <input id="searchInput" placeholder="输入股票 / 基金名称,如:贵州茅台、易方达蓝筹精选 A" value="贵州茅台" />
+    <button class="btn btn-primary" onclick="go('analysis');runPipeline()">分析</button>
+  </div>
+  <div class="card">
+    <div class="form-row">
+      <div><label>购买时间</label><input type="date" value="2025-03-14"></div>
+      <div><label>购买金额 (¥)</label><input type="number" value="50000"></div>
+      <div><label>是否 15:00 前购买</label><select><option>是(当日净值)</option><option>否(次日净值)</option></select></div>
+    </div>
+    <div class="form-row" style="margin-top:20px">
+      <div class="kpi"><div class="lbl">买入净值 / 价格</div><div class="val">¥1,632.50</div></div>
+      <div class="kpi"><div class="lbl">买入份额</div><div class="val">30.63 股</div></div>
+      <div class="kpi"><div class="lbl">当前收益率</div><div class="val up">+11.62%</div><div class="sub up">+¥5,810</div></div>
+    </div>
+    <button class="btn btn-primary" style="margin-top:22px" onclick="go('analysis');runPipeline()">⚡ 启动六阶段 AI 分析</button>
+  </div>
+</div>
+</section>
+
+<!-- ============ PORTFOLIO ============ -->
+<section class="view" id="portfolio">
+<div class="wrap">
+  <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+    <div class="kicker">🧭 我的投资组合</div>
+    <button class="btn btn-ghost" onclick="openUpload()" style="margin-left:auto">📸 上传持仓截图</button>
+    <button class="btn btn-primary" onclick="go('analysis');runPipeline()">⚡ 一键诊断组合</button>
+  </div>
+  <h1 class="hero" style="font-size:32px;margin:16px 0 24px">组合总览</h1>
+
+  <div class="kpis">
+    <div class="kpi"><div class="lbl">总市值</div><div class="val">¥486,230</div><div class="sub">成本 ¥442,000</div></div>
+    <div class="kpi"><div class="lbl">累计收益</div><div class="val up">+¥44,230</div><div class="sub up">+10.01%</div></div>
+    <div class="kpi"><div class="lbl">今日盈亏</div><div class="val up">+¥3,820</div><div class="sub up">+0.79%</div></div>
+    <div class="kpi"><div class="lbl">最大回撤</div><div class="val down">-12.4%</div><div class="sub">近一年</div></div>
+  </div>
+
+  <div class="grid g2" style="margin-top:22px">
+    <div class="card"><h3 style="margin-bottom:14px">📈 组合收益曲线</h3><div id="pnlChart" class="chart"></div></div>
+    <div class="card"><h3 style="margin-bottom:14px">🥧 行业配置分布</h3><div id="allocChart" class="chart"></div></div>
+  </div>
+
+  <div class="alert warn" style="margin-top:22px">
+    <div class="ic">⚠️</div>
+    <div><h4>行业集中度预警</h4><p>你的组合中 <b style="color:var(--gold)">新能源相关资产占比 47%</b>(宁德时代 + 新能源 ETF + 易方达新能源),行业高度集中,波动风险偏高。建议见"AI 组合优化"再平衡方案。</p></div>
+  </div>
+
+  <div class="card" style="margin-top:22px">
+    <h3 style="margin-bottom:6px">📋 持仓明细</h3>
+    <table>
+      <thead><tr><th>名称</th><th>类型</th><th>行业</th><th>持仓成本</th><th>现价/净值</th><th>市值</th><th>收益率</th><th>操作</th></tr></thead>
+      <tbody>
+        <tr><td><b>贵州茅台</b><br><span style="color:var(--txt3);font-size:12px">600519</span></td><td>股票</td><td><span class="tag tag-cons">消费</span></td><td>¥1,632.50</td><td>¥1,822.30</td><td>¥182,230</td><td class="up">+11.62%</td><td><a onclick="go('analysis');runPipeline()" style="color:var(--blue);cursor:pointer;font-weight:700">分析</a></td></tr>
+        <tr><td><b>宁德时代</b><br><span style="color:var(--txt3);font-size:12px">300750</span></td><td>股票</td><td><span class="tag tag-new">新能源</span></td><td>¥210.40</td><td>¥196.80</td><td>¥98,400</td><td class="down">-6.46%</td><td><a onclick="go('analysis');runPipeline()" style="color:var(--blue);cursor:pointer;font-weight:700">分析</a></td></tr>
+        <tr><td><b>易方达蓝筹精选</b><br><span style="color:var(--txt3);font-size:12px">005827</span></td><td>基金</td><td><span class="tag tag-cons">消费</span></td><td>¥2.140</td><td>¥2.386</td><td>¥71,580</td><td class="up">+11.50%</td><td><a onclick="go('analysis');runPipeline()" style="color:var(--blue);cursor:pointer;font-weight:700">分析</a></td></tr>
+        <tr><td><b>华夏新能源ETF</b><br><span style="color:var(--txt3);font-size:12px">516160</span></td><td>ETF</td><td><span class="tag tag-new">新能源</span></td><td>¥1.024</td><td>¥0.958</td><td>¥57,480</td><td class="down">-6.45%</td><td><a onclick="go('analysis');runPipeline()" style="color:var(--blue);cursor:pointer;font-weight:700">分析</a></td></tr>
+        <tr><td><b>招商银行</b><br><span style="color:var(--txt3);font-size:12px">600036</span></td><td>股票</td><td><span class="tag tag-bank">银行</span></td><td>¥33.20</td><td>¥38.65</td><td>¥46,380</td><td class="up">+16.42%</td><td><a onclick="go('analysis');runPipeline()" style="color:var(--blue);cursor:pointer;font-weight:700">分析</a></td></tr>
+        <tr><td><b>中际旭创</b><br><span style="color:var(--txt3);font-size:12px">300308</span></td><td>股票</td><td><span class="tag tag-tech">科技</span></td><td>¥98.60</td><td>¥121.40</td><td>¥30,160</td><td class="up">+23.12%</td><td><a onclick="go('analysis');runPipeline()" style="color:var(--blue);cursor:pointer;font-weight:700">分析</a></td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+</section>
+
+<!-- ============ ANALYSIS ============ -->
+<section class="view" id="analysis">
+<div class="wrap">
+  <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+    <div class="kicker">⚡ AI 六阶段分析 · <span id="targetName">贵州茅台 600519</span></div>
+    <button class="btn btn-ghost" style="margin-left:auto" onclick="runPipeline()">🔄 重新分析</button>
+  </div>
+  <h1 class="hero" style="font-size:30px;margin:16px 0 8px">AI 投研全流程</h1>
+  <p style="color:var(--txt2);margin-bottom:24px">下方为模拟演示数据,展示多智能体协同分析的完整形态。</p>
+
+  <!-- progress stepper -->
+  <div class="card" style="margin-bottom:24px">
+    <div id="stepper" style="display:grid;grid-template-columns:repeat(6,1fr);gap:10px"></div>
+  </div>
+
+  <!-- STAGE 1: agents -->
+  <div class="sec-title"><span class="num">1</span><h2>数据采集中心</h2><small>5 个 Agent 并行工作</small></div>
+  <div class="agent-grid" id="agentGrid"></div>
+  <div class="card" style="margin-top:18px">
+    <h4 style="margin-bottom:10px;color:var(--txt2)">📦 统一数据包 (Unified Data Pack)</h4>
+    <div class="datapack" id="dataPack"></div>
+  </div>
+
+  <!-- STAGE 2: committee -->
+  <div class="sec-title"><span class="num">2</span><h2>AI 投资委员会 · 多空辩论</h2><small>6 派分析师互相攻击</small></div>
+  <div class="committee">
+    <div class="card">
+      <h4 style="margin-bottom:14px">💬 辩论实况</h4>
+      <div class="debate-feed" id="debateFeed"></div>
+    </div>
+    <div class="card verdict">
+      <div style="color:var(--txt2);font-size:14px">研究主管最终裁决</div>
+      <div class="big up" id="verdictText">BUY</div>
+      <div id="confRing" class="conf-ring" style="width:150px;height:150px"></div>
+      <div style="color:var(--txt2);font-size:13px;margin-top:8px">6 派意见:<b class="up" id="buyCount">4 买</b> · <b class="s-hold" style="color:var(--gold)" id="holdCount">1 持有</b> · <b class="down" id="sellCount">1 卖</b></div>
+    </div>
+  </div>
+
+  <!-- STAGE 3: trade plan -->
+  <div class="sec-title"><span class="num">3</span><h2>AI 交易计划</h2><small>分批建仓 + 止盈止损 + Kelly 仓位</small></div>
+  <div class="grid g2">
+    <div class="card">
+      <h4 style="margin-bottom:12px">🎯 建仓节奏(分三批)</h4>
+      <div class="batch">
+        <div class="b"><div class="p">30%</div><div class="l">第一仓 · ¥1,822</div></div>
+        <div class="b"><div class="p">20%</div><div class="l">第二仓 · 回调至 ¥1,760</div></div>
+        <div class="b"><div class="p">50%</div><div class="l">第三仓 · 突破 ¥1,880</div></div>
+      </div>
+      <div style="margin-top:18px">
+        <div class="plan-row"><span class="k">建议总仓位 (Kelly)</span><span class="v" style="color:var(--blue)">18% 账户资金</span></div>
+        <div class="plan-row"><span class="k">止盈目标</span><span class="v up">¥2,050 (+12.5%)</span></div>
+        <div class="plan-row"><span class="k">ATR 动态止损</span><span class="v down">¥1,712 (-6.0%)</span></div>
+        <div class="plan-row"><span class="k">风险收益比</span><span class="v" style="color:var(--gold)">1 : 2.08</span></div>
+      </div>
+    </div>
+    <div class="card"><h4 style="margin-bottom:14px">📊 K 线与关键价位</h4><div id="klineChart" class="chart-sm"></div></div>
+  </div>
+
+  <!-- STAGE 4: risk -->
+  <div class="sec-title"><span class="num">4</span><h2>AI 风险委员会</h2><small>激进 / 保守 / 中性博弈</small></div>
+  <div class="grid g2">
+    <div class="card">
+      <div style="display:flex;gap:16px;align-items:center;margin-bottom:16px">
+        <div class="risk-pill" style="background:rgba(232,184,75,.15);color:var(--gold)">风险等级 <span class="stars">★★★★☆</span></div>
+        <div class="risk-pill" style="background:var(--up-soft);color:var(--up)">建议:继续持有 + 逢低加仓</div>
+      </div>
+      <div class="msg" style="animation:none;opacity:1;transform:none;margin-bottom:12px"><div class="av" style="background:var(--up-soft);color:var(--up)">🔥</div><div class="body"><div class="role">激进派 <span class="stance s-buy">加仓</span></div><div class="txt">现在不买会踏空,主升浪未走完,应果断加仓。</div></div></div>
+      <div class="msg" style="animation:none;opacity:1;transform:none;margin-bottom:12px"><div class="av" style="background:var(--down-soft);color:var(--down)">🛡️</div><div class="body"><div class="role">保守派 <span class="stance s-hold">等待</span></div><div class="txt">中报还没出,业绩不及预期的可能性存在,建议等财报落地。</div></div></div>
+      <div class="msg" style="animation:none;opacity:1;transform:none"><div class="av" style="background:rgba(232,184,75,.15);color:var(--gold)">⚖️</div><div class="body"><div class="role">中性派 <span class="stance s-hold">确认</span></div><div class="txt">可等突破 ¥1,880 确认后再加,兼顾收益与安全边际。</div></div></div>
+    </div>
+    <div class="card"><h4 style="margin-bottom:14px">🕸️ 多维风险雷达</h4><div id="radarChart" class="chart-sm"></div></div>
+  </div>
+
+  <!-- STAGE 5: optimization -->
+  <div class="sec-title"><span class="num">5</span><h2>AI 组合优化</h2><small>资产配置再平衡</small></div>
+  <div class="grid g2">
+    <div class="card">
+      <div class="alert warn" style="margin-bottom:16px"><div class="ic">⚠️</div><div><h4>检测到行业集中度过高</h4><p>新能源资产占比 47%,消费占比 31%,组合波动率偏高 (年化 24.6%)。</p></div></div>
+      <h4 style="margin-bottom:10px">💡 再平衡建议</h4>
+      <div class="plan-row"><span class="k">↓ 减配 新能源</span><span class="v down">47% → 30%</span></div>
+      <div class="plan-row"><span class="k">↑ 增配 医药</span><span class="v up">0% → 10%</span></div>
+      <div class="plan-row"><span class="k">↑ 增配 黄金 / 债券</span><span class="v up">0% → 12%</span></div>
+      <div class="plan-row"><span class="k">预期组合波动率</span><span class="v" style="color:var(--blue)">24.6% → 17.2%</span></div>
+    </div>
+    <div class="card"><h4 style="margin-bottom:14px">⚖️ 优化前 vs 优化后</h4><div id="optChart" class="chart-sm"></div></div>
+  </div>
+
+  <div style="text-align:center;margin-top:36px">
+    <button class="btn btn-primary" style="padding:14px 32px;font-size:15px" onclick="toast('📄 已生成完整 PDF 研报(演示)')">📄 导出完整 PDF 研报</button>
+  </div>
+</div>
+</section>
+
+<!-- ============ REVIEW ============ -->
+<section class="view" id="review">
+<div class="wrap">
+  <div class="kicker">🌙 AI 复盘中心 · 每晚自动运行</div>
+  <h1 class="hero" style="font-size:32px;margin:16px 0 10px">决策复盘 · <span>持续优化准确率</span></h1>
+  <p class="hero-sub" style="margin-bottom:24px">每天收盘后,AI 自动比对昨日结论与今日走势,分析成功/失败原因,反哺 Prompt 迭代。</p>
+
+  <div class="kpis">
+    <div class="kpi"><div class="lbl">近 30 日胜率</div><div class="val up">68.4%</div><div class="sub up">↑ 较上月 +5.2%</div></div>
+    <div class="kpi"><div class="lbl">累计复盘次数</div><div class="val">1,284</div><div class="sub">条决策记录</div></div>
+    <div class="kpi"><div class="lbl">平均单次收益</div><div class="val up">+2.31%</div><div class="sub">正确决策</div></div>
+    <div class="kpi"><div class="lbl">Prompt 迭代版本</div><div class="val">v4.2</div><div class="sub">自动进化中</div></div>
+  </div>
+
+  <div class="grid g2" style="margin-top:22px">
+    <div class="card"><h3 style="margin-bottom:14px">📈 AI 决策胜率趋势</h3><div id="winrateChart" class="chart-sm"></div></div>
+    <div class="card">
+      <h3 style="margin-bottom:14px">🗂️ 最近复盘记录</h3>
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div class="review-item"><div class="res win">✓</div><div style="flex:1"><b>贵州茅台 · 昨日建议 BUY</b><div style="color:var(--txt2);font-size:13px;margin-top:3px">今日 <span class="up">+3.1%</span> · 成功原因:北向资金持续流入 + 技术突破确认,判断准确。</div></div></div>
+        <div class="review-item"><div class="res lose">✕</div><div style="flex:1"><b>宁德时代 · 昨日建议 HOLD</b><div style="color:var(--txt2);font-size:13px;margin-top:3px">今日 <span class="down">-2.4%</span> · 失败原因:低估了行业政策利空,新闻权重需上调 → 已优化 Prompt。</div></div></div>
+        <div class="review-item"><div class="res win">✓</div><div style="flex:1"><b>招商银行 · 昨日建议 BUY</b><div style="color:var(--txt2);font-size:13px;margin-top:3px">今日 <span class="up">+1.8%</span> · 成功原因:高股息防御属性 + 资金派判断一致。</div></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ============ COACH ============ -->
+<section class="view" id="coach">
+<div class="wrap">
+  <div class="kicker">🏆 AI 持仓教练 · 持续陪伴</div>
+  <h1 class="hero" style="font-size:32px;margin:16px 0 10px">不止一次性分析,<span>而是持续跟踪</span></h1>
+  <p class="hero-sub" style="margin-bottom:24px">每日更新收益/回撤/风险暴露,遇重大公告、财报、政策变化主动提醒,定期生成周报月报。</p>
+
+  <div class="grid g3">
+    <div class="card"><div class="entry-ic" style="background:rgba(77,141,255,.15)">📅</div><h3>每日健康检查</h3><p style="color:var(--txt2);font-size:13.5px">自动更新收益、回撤、风险暴露与波动率。</p></div>
+    <div class="card"><div class="entry-ic" style="background:rgba(255,77,79,.15)">🔔</div><h3>重大事件提醒</h3><p style="color:var(--txt2);font-size:13.5px">持仓触发公告/财报/政策变化时主动推送。</p></div>
+    <div class="card"><div class="entry-ic" style="background:rgba(22,199,132,.15)">📰</div><h3>周报 / 月报</h3><p style="color:var(--txt2);font-size:13.5px">总结投资表现、决策复盘与风险变化。</p></div>
+  </div>
+
+  <div class="card" style="margin-top:22px">
+    <h3 style="margin-bottom:14px">🔔 今日待办提醒</h3>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div class="alert"><div class="ic">🔴</div><div><h4>宁德时代 (300750) 明日盘后披露中报</h4><p>你持有该股 ¥98,400,建议关注业绩是否达预期,已为你预约财报后自动分析。</p></div></div>
+      <div class="alert warn"><div class="ic">🟡</div><div><h4>新能源板块集中度升至 47%</h4><p>较上周 +4%,已超过 40% 阈值,建议查看组合优化再平衡方案。</p></div></div>
+      <div class="alert" style="background:rgba(22,199,132,.08);border-color:rgba(22,199,132,.3)"><div class="ic">🟢</div><div><h4>招商银行触发止盈观察位 ¥38.50</h4><p>当前 +16.42%,可考虑部分止盈锁定利润。</p></div></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:22px"><h3 style="margin-bottom:14px">📉 组合风险暴露趋势</h3><div id="exposureChart" class="chart-sm"></div></div>
+</div>
+</section>
+
+<div class="footer">
+  <b>⚠️ 风险提示</b>:本平台为投资辅助分析工具,所有分析、概率与结论均由 AI 基于历史与公开数据生成,仅供研究参考,<b>不构成任何投资建议</b>。<br>
+  市场存在不确定性,历史表现不代表未来收益,投资决策请自行判断并承担相应风险。数据均为演示模拟。 · 智投研 AI © 2026
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ---------- view routing ---------- */
+function go(id){
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  document.querySelectorAll('.navlinks a').forEach(a=>a.classList.toggle('active',a.dataset.view===id));
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+document.querySelectorAll('.navlinks a').forEach(a=>a.onclick=()=>go(a.dataset.view));
+
+function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2600);}
+function openUpload(){toast('📸 已打开上传 · OCR 自动识别持仓(演示)');}
+
+/* ---------- chart theme ---------- */
+const AX={axisLine:{lineStyle:{color:'#2c3d5f'}},axisLabel:{color:'#9fb0cc'},splitLine:{lineStyle:{color:'#1a2438'}}};
+const UP='#ff4d4f',DOWN='#16c784',BLUE='#4d8dff',PURPLE='#a071ff',GOLD='#e8b84b',CYAN='#2fd4d4';
+const charts={};
+function C(id){if(charts[id])return charts[id];const el=document.getElementById(id);if(!el)return null;charts[id]=echarts.init(el);return charts[id];}
+
+/* ---------- portfolio charts ---------- */
+function drawPortfolio(){
+  const days=Array.from({length:60},(_,i)=>`D${i+1}`);
+  let v=442000;const line=days.map(()=>{v+=(Math.random()-0.42)*4200;return Math.round(v);});
+  C('pnlChart').setOption({
+    grid:{left:60,right:20,top:20,bottom:30},
+    tooltip:{trigger:'axis'},
+    xAxis:{type:'category',data:days,...AX,axisLabel:{show:false}},
+    yAxis:{type:'value',scale:true,...AX,axisLabel:{color:'#9fb0cc',formatter:v=>(v/10000).toFixed(0)+'万'}},
+    series:[{type:'line',data:line,smooth:true,symbol:'none',lineStyle:{color:UP,width:2.5},
+      areaStyle:{color:new echarts.graphic.LinearGradient(0,0,0,1,[{offset:0,color:'rgba(255,77,79,.28)'},{offset:1,color:'rgba(255,77,79,0)'}])}}]
+  });
+  C('allocChart').setOption({
+    tooltip:{trigger:'item',formatter:'{b}: {d}%'},
+    legend:{bottom:0,textStyle:{color:'#9fb0cc'}},
+    series:[{type:'pie',radius:['42%','68%'],center:['50%','44%'],
+      itemStyle:{borderColor:'#131a2b',borderWidth:3},
+      label:{color:'#e7edf7',formatter:'{b}\n{d}%'},
+      data:[
+        {value:47,name:'新能源',itemStyle:{color:DOWN}},
+        {value:31,name:'消费',itemStyle:{color:GOLD}},
+        {value:12,name:'科技',itemStyle:{color:BLUE}},
+        {value:10,name:'银行',itemStyle:{color:CYAN}},
+      ]}]
+  });
+}
+
+/* ---------- analysis charts ---------- */
+function drawKline(){
+  const data=[[1780,1822,1770,1835],[1822,1808,1795,1840],[1808,1795,1780,1815],[1795,1830,1788,1842],
+    [1830,1856,1825,1868],[1856,1840,1830,1870],[1840,1822,1810,1848],[1822,1858,1815,1866],
+    [1858,1875,1850,1888],[1875,1862,1852,1892],[1862,1848,1835,1870],[1848,1822,1815,1855]];
+  C('klineChart').setOption({
+    grid:{left:55,right:20,top:20,bottom:30},
+    tooltip:{trigger:'axis'},
+    xAxis:{type:'category',data:data.map((_,i)=>'T-'+(12-i)),...AX},
+    yAxis:{scale:true,...AX},
+    series:[
+      {type:'candlestick',data,itemStyle:{color:UP,color0:DOWN,borderColor:UP,borderColor0:DOWN}},
+      {type:'line',markLine:{symbol:'none',data:[
+        {yAxis:2050,lineStyle:{color:UP},label:{formatter:'止盈 2050',color:UP}},
+        {yAxis:1712,lineStyle:{color:DOWN},label:{formatter:'止损 1712',color:DOWN}},
+        {yAxis:1880,lineStyle:{color:GOLD,type:'dashed'},label:{formatter:'加仓 1880',color:GOLD}},
+      ]}}
+    ]
+  });
+}
+function drawRadar(){
+  C('radarChart').setOption({
+    tooltip:{},
+    radar:{indicator:[
+      {name:'估值风险',max:100},{name:'波动风险',max:100},{name:'流动性',max:100},
+      {name:'政策风险',max:100},{name:'资金面',max:100},{name:'技术面',max:100}],
+      axisName:{color:'#9fb0cc'},splitLine:{lineStyle:{color:'#22304d'}},splitArea:{areaStyle:{color:['rgba(77,141,255,.03)','rgba(160,113,255,.05)']}}},
+    series:[{type:'radar',data:[{value:[72,58,90,45,80,85],name:'风险画像',
+      areaStyle:{color:'rgba(77,141,255,.25)'},lineStyle:{color:BLUE}}]}]
+  });
+}
+function drawOpt(){
+  C('optChart').setOption({
+    tooltip:{trigger:'axis'},legend:{textStyle:{color:'#9fb0cc'},top:0},
+    grid:{left:40,right:20,top:36,bottom:30},
+    xAxis:{type:'category',data:['新能源','消费','科技','银行','医药','黄金/债'],...AX},
+    yAxis:{type:'value',...AX,axisLabel:{color:'#9fb0cc',formatter:'{value}%'}},
+    series:[
+      {name:'优化前',type:'bar',data:[47,31,12,10,0,0],itemStyle:{color:'#3a4a68'}},
+      {name:'优化后',type:'bar',data:[30,26,12,10,10,12],itemStyle:{color:BLUE}},
+    ]
+  });
+}
+function drawConf(pct){
+  C('confRing').setOption({
+    series:[{type:'gauge',startAngle:210,endAngle:-30,radius:'92%',
+      progress:{show:true,width:12,itemStyle:{color:UP}},
+      axisLine:{lineStyle:{width:12,color:[[1,'#22304d']]}},
+      axisTick:{show:false},splitLine:{show:false},axisLabel:{show:false},pointer:{show:false},
+      anchor:{show:false},
+      detail:{valueAnimation:true,fontSize:30,fontWeight:'bold',color:'#fff',offsetCenter:[0,0],formatter:'{value}%'},
+      data:[{value:pct}]}]
+  });
+}
+
+/* ---------- review / coach ---------- */
+function drawReviewCoach(){
+  if(document.getElementById('winrateChart')){
+    const d=Array.from({length:12},(_,i)=>'W'+(i+1));
+    C('winrateChart').setOption({
+      grid:{left:45,right:20,top:20,bottom:30},tooltip:{trigger:'axis'},
+      xAxis:{type:'category',data:d,...AX},
+      yAxis:{type:'value',min:45,max:80,...AX,axisLabel:{color:'#9fb0cc',formatter:'{value}%'}},
+      series:[{type:'line',smooth:true,symbol:'circle',symbolSize:6,
+        data:[52,55,54,58,60,59,63,61,65,66,64,68],
+        lineStyle:{color:GOLD,width:3},itemStyle:{color:GOLD},
+        areaStyle:{color:new echarts.graphic.LinearGradient(0,0,0,1,[{offset:0,color:'rgba(232,184,75,.3)'},{offset:1,color:'rgba(232,184,75,0)'}])}}]
+    });
+  }
+  if(document.getElementById('exposureChart')){
+    const d=Array.from({length:30},(_,i)=>i+1);
+    C('exposureChart').setOption({
+      grid:{left:45,right:20,top:30,bottom:30},tooltip:{trigger:'axis'},legend:{textStyle:{color:'#9fb0cc'},top:0},
+      xAxis:{type:'category',data:d,...AX,axisLabel:{show:false}},
+      yAxis:{type:'value',...AX,axisLabel:{color:'#9fb0cc',formatter:'{value}%'}},
+      series:[
+        {name:'新能源暴露',type:'line',smooth:true,symbol:'none',data:d.map((_,i)=>38+i*0.32+Math.random()*2),lineStyle:{color:DOWN}},
+        {name:'组合波动率',type:'line',smooth:true,symbol:'none',data:d.map((_,i)=>20+Math.sin(i/4)*3+i*0.15),lineStyle:{color:UP}},
+      ]
+    });
+  }
+}
+
+/* ---------- pipeline animation ---------- */
+const AGENTS=[
+  {ic:'📐',bg:'rgba(77,141,255,.15)',name:'技术分析',m:[['趋势','多头'],['MACD','金叉'],['RSI','62'],['BOLL','上轨']]},
+  {ic:'📊',bg:'rgba(232,184,75,.15)',name:'基本面',m:[['ROE','28%'],['PE','32x'],['毛利率','91%'],['现金流','强']]},
+  {ic:'📰',bg:'rgba(22,199,132,.15)',name:'新闻分析',m:[['公告','中性'],['政策','利好'],['行业','利好'],['舆情','正面']]},
+  {ic:'💰',bg:'rgba(160,113,255,.15)',name:'资金分析',m:[['北向','+3.2亿'],['主力','净流入'],['融资','上升'],['龙虎榜','有']]},
+  {ic:'🌡️',bg:'rgba(47,212,212,.15)',name:'市场情绪',m:[['股吧','中性'],['雪球','偏多'],['期权','谨慎'],['搜索指数','↑']]},
+];
+const STAGES=['数据采集','投资委员会','交易计划','风险委员会','组合优化','复盘'];
+const DEBATE=[
+  {ic:'📐',bg:'rgba(77,141,255,.15)',role:'技术派',s:'buy',t:'MA5 已上穿 MA20 形成金叉,MACD 红柱放大,趋势明确,建议买入。'},
+  {ic:'📊',bg:'rgba(232,184,75,.15)',role:'价值派',s:'hold',t:'PE 已达 32 倍,处于历史 70% 分位,估值不便宜,建议观望等回调。'},
+  {ic:'📈',bg:'rgba(77,141,255,.12)',role:'趋势派',s:'buy',t:'放量突破前高,量价配合良好,突破有效,顺势而为。'},
+  {ic:'📰',bg:'rgba(22,199,132,.15)',role:'新闻派',s:'buy',t:'消费刺激政策落地 + 中报预期向好,基本面催化明确。'},
+  {ic:'💰',bg:'rgba(160,113,255,.15)',role:'资金派',s:'buy',t:'北向连续 5 日净流入 +3.2 亿,主力资金明显回流,资金面强。'},
+  {ic:'⚠️',bg:'rgba(255,77,79,.15)',role:'风险派',s:'sell',t:'大盘处于高位震荡,系统性回调风险存在,建议控制仓位。'},
+  {ic:'🎓',bg:'linear-gradient(135deg,#4d8dff,#a071ff)',role:'研究主管 · 裁决',s:'buy',t:'综合 6 派:技术、趋势、新闻、资金四方看多,价值派中性,仅风险派看空。给出 BUY,但需分批建仓并严格止损。'},
+];
+
+const API_BASE = (location.protocol==='http:'||location.protocol==='https:') ? '' : 'http://127.0.0.1:8000';
+const ROLE_ICON={'技术派':{ic:'📐',bg:'rgba(77,141,255,.15)'},'价值派':{ic:'📊',bg:'rgba(232,184,75,.15)'},
+  '趋势派':{ic:'📈',bg:'rgba(77,141,255,.12)'},'新闻派':{ic:'📰',bg:'rgba(22,199,132,.15)'},
+  '资金派':{ic:'💰',bg:'rgba(160,113,255,.15)'},'风险派':{ic:'⚠️',bg:'rgba(255,77,79,.15)'}};
+
+let running=false;
+async function runPipeline(fast){
+  if(running)return;running=true;
+  const query=(document.getElementById('searchInput')?.value||'贵州茅台').trim();
+  document.getElementById('targetName').textContent = query;
+
+  const sp=document.getElementById('stepper');
+  sp.innerHTML=STAGES.map((s,i)=>`<div id="step${i}" style="text-align:center;padding:12px 6px;border-radius:10px;background:var(--panel2);border:1px solid var(--line);transition:.3s">
+    <div style="font-size:20px;opacity:.4" id="stepic${i}">○</div>
+    <div style="font-size:12.5px;margin-top:6px;color:var(--txt2)">${s}</div></div>`).join('');
+  const ag=document.getElementById('agentGrid');
+  ag.innerHTML=AGENTS.map((a,i)=>`<div class="agent">
+    <div class="status" id="ast${i}">采集中…</div>
+    <div class="ic" style="background:${a.bg}">${a.ic}</div>
+    <h4>Agent ${i+1} · ${a.name}</h4>
+    <div class="metrics" id="am${i}">${a.m.map(([k])=>`<div><span>${k}</span><b>—</b></div>`).join('')}</div>
+    <div class="prog"><i id="ap${i}"></i></div></div>`).join('');
+  document.getElementById('debateFeed').innerHTML='<div style="color:var(--txt3);font-size:13px">⏳ 正在采集真实数据并请求 DeepSeek 投研委员会…</div>';
+  document.getElementById('dataPack').textContent='// 正在从 AKShare 拉取真实数据…';
+
+  AGENTS.forEach((_,i)=>setTimeout(()=>{const p=document.getElementById('ap'+i);if(p)p.style.width='70%';},150+i*120));
+  let stage=0; const totalStages=fast?3:6;
+  const stepTimer=setInterval(()=>{
+    if(stage>0){const p=document.getElementById('stepic'+(stage-1));if(p){p.textContent='✓';p.style.opacity=1;document.getElementById('step'+(stage-1)).style.borderColor='var(--down)';}}
+    if(stage<totalStages){const c=document.getElementById('step'+stage);if(c){c.style.background='linear-gradient(135deg,rgba(77,141,255,.25),rgba(160,113,255,.2))';c.style.borderColor='var(--blue)';document.getElementById('stepic'+stage).textContent='◉';document.getElementById('stepic'+stage).style.opacity=1;}}
+    stage++; if(stage>totalStages)clearInterval(stepTimer);
+  },600);
+
+  toast(fast?'⚡ 快速分析中…':'🚀 六阶段真实分析启动…（DeepSeek 推理约需 10-30 秒）');
+
+  try{
+    const resp=await fetch(API_BASE+'/api/analyze',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({query,fast:!!fast})});
+    if(!resp.ok){let e={};try{e=await resp.json();}catch(_){}
+      throw new Error(e.error||('HTTP '+resp.status));}
+    const data=await resp.json();
+    renderReal(data,fast);
+  }catch(err){
+    document.getElementById('debateFeed').innerHTML=`<div class="alert"><div class="ic">⚠️</div><div><h4>无法连接后端</h4><p>${err.message}<br>请先启动后端,并通过 <b>http://127.0.0.1:8000</b> 打开本页(不要直接双击 HTML)。</p></div></div>`;
+    toast('⚠️ 后端未连接');
+    AGENTS.forEach((_,i)=>{const el=document.getElementById('ast'+i);if(el)el.textContent='—';});
+  }finally{running=false;}
+}
+
+function renderReal(data,fast){
+  const A=data.agents||{}, pack=data.data_pack||{}, com=data.committee||{};
+  if(data.symbol)document.getElementById('targetName').textContent=`${data.symbol.name} ${data.symbol.code}`;
+  const t=A.technical||{},f=A.fundamental||{},nw=A.news||{},fl=A.fund_flow||{},se=A.sentiment||{};
+  const metricSets=[
+    [['趋势',t.trend],['MACD',t.macd],['RSI',t.rsi],['MA20',t.ma20]],
+    [['ROE',f.roe],['PE',f.pe],['PB',f.pb],['估值',f.pe?(f.pe>40?'偏高':'合理'):'—']],
+    [['新闻',nw.ok?(nw.items.length+'条'):'—'],['最新',nw.items&&nw.items[0]?'已获取':'—'],['来源','东财'],['状态',nw.ok?'✓':'—']],
+    [['主力',fl.main_state],['净额',fl.main_net],['北向',fl.north_summary?'已获取':'—'],['日期',fl.date]],
+    [['情绪',se.mood],['换手',se.turnover!=null?se.turnover+'%':'—'],['来源','东财'],['状态',se.ok?'✓':'—']],
+  ];
+  metricSets.forEach((ms,i)=>{
+    const box=document.getElementById('am'+i);
+    if(box)box.innerHTML=ms.map(([k,v])=>`<div><span>${k}</span><b>${(v==null||v==='')?'—':v}</b></div>`).join('');
+    const p=document.getElementById('ap'+i);if(p)p.style.width='100%';
+    const st=document.getElementById('ast'+i);const okArr=[t.ok,f.ok,nw.ok,fl.ok,se.ok];
+    if(st)st.textContent=okArr[i]?'✓ 完成':'部分';
+  });
+  document.getElementById('dataPack').innerHTML=jsonColor(pack)+`\n<span style="color:#6b7c9c">// 来源: ${data.source||'AKShare'} · ${data.updated_at||''}</span>`;
+
+  const feed=document.getElementById('debateFeed');feed.innerHTML='';
+  if(com.ok&&com.debate){
+    let buy=0,sell=0,hold=0;
+    com.debate.forEach((d,i)=>{
+      if(d.stance==='buy')buy++;else if(d.stance==='sell')sell++;else hold++;
+      setTimeout(()=>{
+        const ri=ROLE_ICON[d.role]||{ic:'🧠',bg:'var(--panel2)'};
+        const stanceLabel=d.stance==='buy'?'看多':d.stance==='sell'?'看空':'中性';
+        const el=document.createElement('div');el.className='msg';
+        el.innerHTML=`<div class="av" style="background:${ri.bg}">${ri.ic}</div>
+          <div class="body"><div class="role">${d.role}<span class="stance s-${d.stance}">${stanceLabel}</span></div>
+          <div class="txt">${d.text}</div></div>`;
+        feed.appendChild(el);feed.scrollTop=feed.scrollHeight;
+      },i*550);
+    });
+    setTimeout(()=>{
+      const v=com.verdict||{};
+      const vt=document.getElementById('verdictText');
+      vt.textContent=v.action||'HOLD';
+      vt.className='big '+(v.action==='BUY'?'up':v.action==='SELL'?'down':'');
+      if(v.action==='HOLD')vt.style.color='var(--gold)';
+      drawConf(v.confidence||60);
+      document.getElementById('buyCount').textContent=buy+' 买';
+      document.getElementById('holdCount').textContent=hold+' 持有';
+      document.getElementById('sellCount').textContent=sell+' 卖';
+      if(v.summary){
+        const st=(v.action||'').toLowerCase();
+        const el=document.createElement('div');el.className='msg';
+        el.innerHTML=`<div class="av" style="background:linear-gradient(135deg,#4d8dff,#a071ff)">🎓</div>
+          <div class="body"><div class="role">研究主管 · 裁决<span class="stance s-${st==='buy'?'buy':st==='sell'?'sell':'hold'}">${v.action}</span></div>
+          <div class="txt">${v.summary}</div></div>`;
+        feed.appendChild(el);feed.scrollTop=feed.scrollHeight;
+      }
+    },com.debate.length*550+300);
+  }else{
+    feed.innerHTML=`<div class="alert"><div class="ic">⚠️</div><div><h4>AI 委员会返回异常</h4><p>${(com.error||'未知错误')}</p></div></div>`;
+  }
+
+  if(com.trade_plan){
+    const tp=com.trade_plan, batches=tp.batches||[30,20,50];
+    const bEl=document.querySelector('#analysis .batch');
+    if(bEl)bEl.innerHTML=batches.map((b,i)=>`<div class="b"><div class="p">${b}%</div><div class="l">第${['一','二','三'][i]||(i+1)}仓</div></div>`).join('');
+    document.querySelectorAll('#analysis .plan-row').forEach(r=>{
+      const k=r.querySelector('.k')?.textContent||'';const v=r.querySelector('.v');if(!v)return;
+      if(k.includes('Kelly'))v.textContent=(tp.kelly_pct||'—')+'% 账户资金';
+      else if(k.includes('止盈'))v.textContent=tp.take_profit||'—';
+      else if(k.includes('止损'))v.textContent=tp.stop_loss||'—';
+      else if(k.includes('风险收益'))v.textContent=tp.rr_ratio||'—';
+    });
+  }
+  drawKlineReal(t.kline,com.trade_plan);drawRadar();drawOpt();
+
+  if(com.risk){
+    const rk=com.risk, lv=rk.risk_level||3;
+    const stars='★'.repeat(lv)+'☆'.repeat(5-lv);
+    const pill=document.querySelector('#analysis .risk-pill .stars');if(pill)pill.textContent=stars;
+    const adv=document.querySelectorAll('#analysis .risk-pill')[1];if(adv)adv.innerHTML='建议：'+(rk.advice||'持有');
+  }
+  toast('✅ 分析完成 · 数据来自 AKShare,结论由 DeepSeek 生成');
+}
+
+function jsonColor(obj){
+  let s=JSON.stringify(obj,null,2);
+  s=s.replace(/"([^"]+)":/g,'<span class="k">"$1"</span>:')
+     .replace(/: "([^"]*)"/g,': <span class="s">"$1"</span>')
+     .replace(/: (\d+\.?\d*)/g,': <span class="n">$1</span>');
+  return s;
+}
+function drawKlineReal(kline,plan){
+  if(!kline||!kline.length){drawKline();return;}
+  const cats=kline.map(k=>String(k[0]).slice(5));
+  const data=kline.map(k=>[k[1],k[2],k[3],k[4]]);
+  const ml=[];
+  if(plan){
+    const tp=parseFloat((plan.take_profit||'').replace(/[^\d.]/g,''));
+    const sl=parseFloat((plan.stop_loss||'').replace(/[^\d.]/g,''));
+    if(tp)ml.push({yAxis:tp,lineStyle:{color:UP},label:{formatter:'止盈 '+tp,color:UP}});
+    if(sl)ml.push({yAxis:sl,lineStyle:{color:DOWN},label:{formatter:'止损 '+sl,color:DOWN}});
+  }
+  C('klineChart').setOption({
+    grid:{left:55,right:20,top:20,bottom:30},tooltip:{trigger:'axis'},
+    xAxis:{type:'category',data:cats,...AX,axisLabel:{show:false}},
+    yAxis:{scale:true,...AX},
+    series:[{type:'candlestick',data,itemStyle:{color:UP,color0:DOWN,borderColor:UP,borderColor0:DOWN},
+      markLine:ml.length?{symbol:'none',data:ml}:undefined}]
+  });
+}
+
+/* ---------- init ---------- */
+window.addEventListener('load',()=>{drawPortfolio();drawReviewCoach();});
+window.addEventListener('resize',()=>{Object.values(charts).forEach(c=>c&&c.resize());});
+// redraw charts when switching to a view (echarts needs visible container)
+const _go=go;
+window.go=function(id){_go(id);setTimeout(()=>{
+  if(id==='portfolio')drawPortfolio();
+  if(id==='review'||id==='coach')drawReviewCoach();
+  Object.values(charts).forEach(c=>c&&c.resize());
+},60);};
+</script>
+</body>
+</html>
