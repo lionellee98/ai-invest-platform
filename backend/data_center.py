@@ -30,27 +30,37 @@ _UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
 
 
 # ------------------------------------------------------------ 传输层
-def http_bytes(url: str, timeout: int = 15) -> bytes:
+# 不同数据源对 Referer 要求不同：腾讯财经用 gu.qq.com，东方财富基金接口需对应域名
+_TENCENT_REF = "https://gu.qq.com/"
+_EM_REF = "https://fundf10.eastmoney.com/"
+_EM_SEARCH_REF = "https://fundsuggest.eastmoney.com/"
+
+
+def http_bytes(url: str, timeout: int = 15, referer: str = _TENCENT_REF) -> bytes:
+    headers = {"User-Agent": _UA, "Referer": referer,
+               "Accept": "*/*", "Accept-Language": "zh-CN,zh;q=0.9"}
     if requests is not None:
         try:
-            r = requests.get(url, timeout=timeout,
-                             headers={"User-Agent": _UA, "Referer": "https://gu.qq.com/"})
+            r = requests.get(url, timeout=timeout, headers=headers)
             if r.status_code == 200 and r.content:
                 return r.content
         except Exception:
             pass
     try:
         o = subprocess.run(
-            ["curl", "-s", "-m", str(timeout), "-H", f"User-Agent: {_UA}",
-             "-H", "Referer: https://gu.qq.com/", url],
+            ["curl", "-s", "-m", str(timeout),
+             "-H", f"User-Agent: {_UA}",
+             "-H", f"Referer: {referer}",
+             "-H", "Accept: */*", url],
             capture_output=True, timeout=timeout + 5)
         return o.stdout or b""
     except Exception:
         return b""
 
 
-def http_text(url: str, encoding: str = "utf-8", timeout: int = 15) -> str:
-    b = http_bytes(url, timeout)
+def http_text(url: str, encoding: str = "utf-8", timeout: int = 15,
+              referer: str = _TENCENT_REF) -> str:
+    b = http_bytes(url, timeout, referer=referer)
     if not b:
         return ""
     try:
@@ -59,8 +69,8 @@ def http_text(url: str, encoding: str = "utf-8", timeout: int = 15) -> str:
         return b.decode("utf-8", errors="replace")
 
 
-def http_json(url: str, timeout: int = 15):
-    txt = http_text(url, "utf-8", timeout)
+def http_json(url: str, timeout: int = 15, referer: str = _TENCENT_REF):
+    txt = http_text(url, "utf-8", timeout, referer=referer)
     if not txt:
         return None
     try:
@@ -298,10 +308,10 @@ def resolve_fund(query: str):
     q = (query or "").strip()
     if not q:
         return None
-    # 1) 东方财富基金搜索
+    # 1) 东方财富基金搜索（需对应 Referer）
     url = ("https://fundsuggest.eastmoney.com/FundSearch/api/FundSearch/GSGQSearch?keyword="
            + urllib.parse.quote(q))
-    d = http_json(url, timeout=10)
+    d = http_json(url, timeout=10, referer=_EM_SEARCH_REF)
     try:
         res = d["data"]["fundSearchResult"]["results"]
         if res:
@@ -309,17 +319,40 @@ def resolve_fund(query: str):
             return {"code": r["code"], "name": r["name"], "type": r.get("type", "")}
     except Exception:
         pass
-    # 2) 纯 6 位数字按基金代码尝试
+    # 2) 备选搜索域名
+    url2 = ("https://fundapi.eastmoney.com/fundSearch/api/FundSearch/GSGQSearch?keyword="
+            + urllib.parse.quote(q))
+    d2 = http_json(url2, timeout=10, referer=_EM_SEARCH_REF)
+    try:
+        res = d2["data"]["fundSearchResult"]["results"]
+        if res:
+            r = res[0]
+            return {"code": r["code"], "name": r["name"], "type": r.get("type", "")}
+    except Exception:
+        pass
+    # 3) 纯 6 位数字：用天天基金净值接口反查名称（极稳，无需特殊 Referer）
     if q.isdigit() and len(q) == 6:
-        return {"code": q, "name": q, "type": ""}
+        nm = _fund_name_by_code(q)
+        return {"code": q, "name": nm or q, "type": ""}
     return None
 
 
+def _fund_name_by_code(code: str):
+    """天天基金(gz.1234567)净值接口反查基金名称，纯 6 位代码可用。"""
+    txt = http_text(f"https://fundgz.1234567.com.cn/js/{code}.js",
+                    "utf-8", timeout=10)
+    if not txt:
+        return None
+    m = re.search(r'name["\s]*:"([^"]+)"', txt)
+    return m.group(1) if m else None
+
+
 def get_fund_holdings(code: str):
-    """东方财富 fundf10 前十大重仓股。返回 {ok,date,holdings:[{code,name,pct}]}。"""
+    """东方财富 fundf10 前十大重仓股（需 fundf10 Referer）。返回 {ok,date,holdings}。"""
     out = {"ok": False, "holdings": [], "date": ""}
-    url = f"https://fundf10.eastmoney.com/FundArchivesDatas.aspx?type=jjcc&code={code}&topline=10"
-    txt = http_text(url, "utf-8", timeout=12)
+    url = (f"https://fundf10.eastmoney.com/FundArchivesDatas.aspx?type=jjcc"
+           f"&code={code}&topline=10")
+    txt = http_text(url, "utf-8", timeout=12, referer=_EM_REF)
     if not txt:
         return out
     m = re.search(r'content:"(.*?)"\s*,\s*arryear', txt, re.S) or re.search(r'content:"(.*?)"', txt, re.S)
@@ -359,7 +392,7 @@ def get_stock_industry(secid_em: str):
     """东方财富个股行业（f127）。"""
     d = http_json(
         f"https://push2.eastmoney.com/api/qt/stock/get?secid={secid_em}&fields=f57,f58,f127",
-        timeout=8)
+        timeout=8, referer=_EM_REF)
     try:
         return d["data"].get("f127") or ""
     except Exception:
