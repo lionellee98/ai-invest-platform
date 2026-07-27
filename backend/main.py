@@ -95,7 +95,9 @@ def quote(query: str):
 def analyze(req: AnalyzeReq):
     """完整分析：股票/ETF 走六阶段真实数据；基金自动降级为前十大重仓股分析。"""
     sym = data_center.resolve_symbol(req.query)
-    if sym:
+    _stype = (sym or {}).get("type", "").upper()
+    _is_otc_fund = "FUND" in _stype or _stype in ("JJ", "KJ")
+    if sym and not _is_otc_fund:
         data = data_center.collect_all(req.query)
         # 只有拿到真实行情价才走股票六阶段；否则（如场外基金）降级
         if data.get("ok") and data["data_pack"].get("price"):
