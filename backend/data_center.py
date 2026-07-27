@@ -349,15 +349,31 @@ def resolve_fund(query: str):
 
 
 def _fund_name_by_code(code: str):
-    """东方财富 pingzhongdata 静态文件反查基金名称（fundf10 域名，线上可达）。"""
+    """基金名称反查：腾讯 smartbox（同源股票接口，云端稳定）→ 东方财富 pingzhongdata → 天天基金。"""
+    # 1) 腾讯财经 smartbox（与股票解析同源，线上稳定可达）
+    try:
+        txt = http_text("https://smartbox.gtimg.cn/s3/?t=all&q=" + urllib.parse.quote(code), "gbk")
+        m = re.search(r'v_hint="([^"]*)"', txt or "")
+        if m:
+            parts = m.group(1).split("^")[0].split("~")
+            if len(parts) >= 3:
+                nm = parts[2]
+                try:
+                    nm = nm.encode().decode("unicode_escape")
+                except Exception:
+                    pass
+                if nm and nm != code:
+                    return nm
+    except Exception:
+        pass
+    # 2) 东方财富 pingzhongdata 静态文件（fundf10 域名，线上可达）
     txt = http_text(f"https://fundf10.eastmoney.com/pingzhongdata/{code}.js",
-                    "utf-8", timeout=10, referer=_EM_REF)
-    if not txt:
-        return None
-    m = re.search(r'fS_name\s*=\s*["\']([^"\']+)["\']', txt)
-    if m:
-        return m.group(1)
-    # 兜底：天天基金净值接口
+                    "utf-8", timeout=15, referer=_EM_REF)
+    if txt:
+        m = re.search(r'fS_name\s*=\s*["\']([^"\']+)["\']', txt)
+        if m:
+            return m.group(1)
+    # 3) 兜底：天天基金净值接口
     txt2 = http_text(f"https://fundgz.1234567.com.cn/js/{code}.js",
                      "utf-8", timeout=10, referer="https://fund.eastmoney.com/")
     if txt2:
@@ -399,6 +415,13 @@ def get_fund_holdings(code: str):
         pct_m = re.search(r"([\d.]+)%", row)
         if code and name and pct_m:
             holdings.append({"code": code, "name": name, "pct": float(pct_m.group(1))})
+    # 去重：同一股票在多个报告期重复出现时，保留占净值更高的当期数据
+    _best = {}
+    for it in holdings:
+        c = it["code"]
+        if c not in _best or it["pct"] > _best[c]["pct"]:
+            _best[c] = it
+    holdings = sorted(_best.values(), key=lambda x: -x["pct"])
     if holdings:
         out["ok"] = True
         out["holdings"] = holdings[:10]
