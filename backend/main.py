@@ -33,6 +33,10 @@ class AnalyzeReq(BaseModel):
     fast: bool = False
 
 
+class PortfolioAnalyzeReq(BaseModel):
+    fast: bool = False
+
+
 class RegisterReq(BaseModel):
     username: str
     password: str
@@ -124,6 +128,23 @@ def analyze(req: AnalyzeReq):
         "error": "未能获取该标的的分析数据。若为基金，前十大重仓股接口可能暂不可用（公开数据源限流），请稍后重试；若为股票，请确认代码/名称正确。",
         "hint": "支持：股票/ETF 代码或名称、公募基金代码或名称（自动降级分析重仓股）",
     }, status_code=404)
+
+
+@app.post("/api/portfolio/analyze")
+def portfolio_analyze(req: PortfolioAnalyzeReq, authorization: str = Header(None)):
+    """组合级诊断：读取当前用户「我的组合」，计算集中度/风险暴露，并由 AI 给出再平衡建议。"""
+    user = _get_username(authorization)
+    pf = users.get_portfolio(user)
+    items = (pf or {}).get("items", [])
+    diag = data_center.analyze_portfolio(items)
+    if not diag.get("ok"):
+        return JSONResponse(diag, status_code=400)
+    committee = ai_committee.run_portfolio_committee(diag, fast=req.fast)
+    return JSONResponse({
+        "ok": True, "kind": "portfolio", "name": "我的组合",
+        "diagnosis": diag,
+        "committee": committee,
+    })
 
 
 @app.post("/api/auth/register")

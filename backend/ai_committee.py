@@ -122,3 +122,68 @@ def run_fund_committee(fund_pack: dict, name: str, fast: bool = False):
         return data
     except Exception as e:
         return {"ok": False, "error": str(e)}
+
+
+PORTFOLIO_SYSTEM = """你是一个组合层面的 AI 投研顾问。给定一位投资者的【持仓组合诊断数据包】
+(由系统基于其「我的组合」真实持仓计算，含总市值、累计收益、行业/类型分布、单一与 Top3 集中度、HHI、
+最佳/最差持仓、风险等级与初步预警)，请基于这些数据给出组合层面的诊断与再平衡建议。
+
+要求：
+1. 严格基于提供的数据，不得编造数据中不存在的具体数值；数据缺失时基于常识合理推断并说明"数据有限"。
+2. summary：2-3 句话的组合整体诊断（≤120字），口语化、有结论。
+3. rebalance：3-4 条具体再平衡动作，每条含 action(减配/增配/持有/观望)、target(资产或行业名)、detail(一句话理由)。
+4. risk_level：1-5 整数星级（与给定 risk_level 基本一致，可微调并说明）。
+5. verdict：对组合整体的操作建议，取值 REBALANCE(需再平衡)/HOLD(维持)/ACCUMULATE(可加仓) 之一。
+6. 全部用简体中文。只输出 JSON，不要多余文字。
+
+输出 JSON 结构：
+{
+ "summary":"...",
+ "rebalance":[{"action":"减配","target":"贵州茅台","detail":"单一占比偏高，建议降至25%以下"}, ...],
+ "risk_level":4,
+ "verdict":"REBALANCE",
+ "portfolio_tip":"一句话配置建议"
+}"""
+
+
+def _portfolio_fallback(diag):
+    """DeepSeek 不可用时的确定性回退，保证前端总有内容。"""
+    rb = []
+    for w in (diag.get("warnings") or [])[:3]:
+        rb.append({"action": ("减配" if ("过高" in w or "显著" in w) else "观望"),
+                   "target": "相关持仓", "detail": w})
+    return {
+        "summary": (f"组合共 {diag.get('holdings_count')} 只持仓，累计收益 "
+                    f"{diag.get('total_pnl_pct')}%，最大单一持仓 {diag.get('top1', {}).get('name')} "
+                    f"占比 {diag.get('top1', {}).get('weight')}%，风险等级 {diag.get('risk_level')}/5。"),
+        "rebalance": rb or [{"action": "持有", "target": "全部",
+                             "detail": "组合分散度良好，维持现状。"}],
+        "risk_level": diag.get("risk_level", 3),
+        "verdict": "REBALANCE" if diag.get("risk_level", 3) >= 4 else "HOLD",
+        "portfolio_tip": (diag.get("warnings") or ["组合分散度良好。"])[0],
+    }
+
+
+def run_portfolio_committee(diag: dict, fast: bool = False):
+    fb = _portfolio_fallback(diag)
+    try:
+        user = "持仓组合诊断数据包：\n" + json.dumps(diag, ensure_ascii=False)
+        if fast:
+            user += "\n（快速模式：仅需 summary 与 rebalance，其余可简略）"
+        resp = _get_client().chat.completions.create(
+            model=_DEEPSEEK_MODEL,
+            messages=[{"role": "system", "content": PORTFOLIO_SYSTEM},
+                      {"role": "user", "content": user}],
+            response_format={"type": "json_object"},
+            temperature=0.7,
+            max_tokens=1200,
+        )
+        content = resp.choices[0].message.content
+        data = json.loads(content)
+        data["ok"] = True
+        data["model"] = _DEEPSEEK_MODEL
+        return data
+    except Exception as e:
+        fb["ok"] = False
+        fb["error"] = str(e)
+        return fb

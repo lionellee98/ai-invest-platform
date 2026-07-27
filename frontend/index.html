@@ -258,6 +258,18 @@
     .wrap{padding:24px 18px 60px}
     .actions .btn{font-size:11px;padding:4px 8px}
   }
+
+  /* ---------- AI 分析：组合 / 单标的 模式切换 ---------- */
+  .analysis-controls{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:6px 0 26px}
+  .seg{display:inline-flex;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:4px}
+  .seg button{border:0;background:transparent;color:var(--txt2);padding:9px 16px;border-radius:9px;
+    font-size:14px;cursor:pointer;transition:.25s;font-family:inherit}
+  .seg button.active{background:linear-gradient(135deg,#4d8dff,#a071ff);color:#fff;box-shadow:0 4px 14px rgba(77,141,255,.35)}
+  #symbolPick{gap:10px;flex-wrap:wrap}
+  #symbolPick .input,#symbolPick select.input{flex:1;min-width:200px;padding:11px 14px;border-radius:11px;
+    border:1px solid var(--line);background:var(--panel2);color:var(--txt);font-size:14px;font-family:inherit}
+  #symbolPick .input:focus,#symbolPick select.input:focus{outline:none;border-color:var(--blue)}
+  .pf-pie-wrap{position:relative}
 </style>
 </head>
 <body>
@@ -274,7 +286,7 @@
   </div>
   <div class="nav-right">
     <div class="badge-live"><span class="dot"></span> 6 智能体在线</div>
-    <button class="btn btn-primary" onclick="go('analysis');runPipeline()">⚡ 开始分析</button>
+    <button class="btn btn-primary" onclick="go('analysis');setAnalysisMode('portfolio');runCurrent()">⚡ 开始分析</button>
     <div id="authBox"></div>
   </div>
 </nav>
@@ -321,11 +333,11 @@
   <!-- modes -->
   <div class="sec-title"><span class="num">◎</span><h2>五种分析模式</h2><small>按需选择速度与深度</small></div>
   <div class="modes">
-    <div class="mode" onclick="go('analysis');runPipeline()"><div class="ic">📑</div><h4>完整分析</h4><p>跑完六阶段全流程,输出完整 PDF 研报</p><div class="t">耗时 2~5 分钟</div></div>
-    <div class="mode" onclick="go('analysis');runPipeline(true)"><div class="ic">⚡</div><h4>快速分析</h4><p>仅跑技术 + 新闻 + 资金三项</p><div class="t">约 30 秒</div></div>
+    <div class="mode" onclick="go('analysis');setAnalysisMode('portfolio');runCurrent()"><div class="ic">📑</div><h4>完整分析</h4><p>跑完六阶段全流程,输出完整 PDF 研报</p><div class="t">耗时 2~5 分钟</div></div>
+    <div class="mode" onclick="go('analysis');setAnalysisMode('portfolio');runCurrent(true)"><div class="ic">⚡</div><h4>快速分析</h4><p>仅跑技术 + 新闻 + 资金三项</p><div class="t">约 30 秒</div></div>
     <div class="mode" onclick="go('portfolio')"><div class="ic">🩺</div><h4>持仓诊断</h4><p>针对已有仓位判断是否该卖</p><div class="t">针对性诊断</div></div>
     <div class="mode" onclick="go('coach')"><div class="ic">🛡️</div><h4>风险扫描</h4><p>扫描整个账户,标出高风险仓位</p><div class="t">全账户</div></div>
-    <div class="mode" onclick="go('analysis');runPipeline(true)"><div class="ic">🎯</div><h4>单点分析</h4><p>只看 MACD 或只分析财报</p><div class="t">单指标</div></div>
+    <div class="mode" onclick="go('analysis');setAnalysisMode('portfolio');runCurrent(true)"><div class="ic">🎯</div><h4>单点分析</h4><p>只看 MACD 或只分析财报</p><div class="t">单指标</div></div>
   </div>
 
   <!-- compliance -->
@@ -344,8 +356,8 @@
   <div class="kicker">🔍 搜索分析</div>
   <h1 class="hero" style="font-size:34px">搜索单只标的并<span>自动反推收益</span></h1>
   <div class="search-box">
-    <input id="searchInput" placeholder="输入股票 / 基金名称,如:贵州茅台、易方达蓝筹精选 A" value="贵州茅台" />
-    <button class="btn btn-primary" onclick="go('analysis');runPipeline()">分析</button>
+    <input id="searchInput" placeholder="输入股票 / 基金名称,如:贵州茅台、易方达蓝筹精选 A" />
+    <button class="btn btn-primary" onclick="go('analysis');setAnalysisMode('portfolio');runCurrent()">分析</button>
   </div>
   <div class="card">
     <div class="form-row">
@@ -358,7 +370,7 @@
       <div class="kpi"><div class="lbl">买入份额</div><div class="val">30.63 股</div></div>
       <div class="kpi"><div class="lbl">当前收益率</div><div class="val up">+11.62%</div><div class="sub up">+¥5,810</div></div>
     </div>
-    <button class="btn btn-primary" style="margin-top:22px" onclick="go('analysis');runPipeline()">⚡ 启动六阶段 AI 分析</button>
+    <button class="btn btn-primary" style="margin-top:22px" onclick="go('analysis');setAnalysisMode('portfolio');runCurrent()">⚡ 启动六阶段 AI 分析</button>
   </div>
 </div>
 </section>
@@ -369,7 +381,7 @@
   <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
     <div class="kicker">🧭 我的投资组合</div>
     <button class="btn btn-ghost" onclick="openUploadModal()" style="margin-left:auto">📸 上传持仓截图</button>
-    <button class="btn btn-primary" onclick="go('analysis');runPipeline()">⚡ 一键诊断组合</button>
+    <button class="btn btn-primary" onclick="go('analysis');setAnalysisMode('portfolio');runCurrent()">⚡ 一键诊断组合</button>
   </div>
   <h1 class="hero" style="font-size:32px;margin:16px 0 24px">组合总览</h1>
 
@@ -408,12 +420,26 @@
 <!-- ============ ANALYSIS ============ -->
 <section class="view" id="analysis">
 <div class="wrap">
-  <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
-    <div class="kicker">⚡ AI 六阶段分析 · <span id="targetName">贵州茅台 600519</span></div>
-    <button class="btn btn-ghost" style="margin-left:auto" onclick="runPipeline()">🔄 重新分析</button>
+  <div class="kicker">⚡ AI 分析 · <span id="targetName">我的组合</span></div>
+  <div class="analysis-controls">
+    <div class="seg" id="modeSeg">
+      <button type="button" data-mode="portfolio" class="active" onclick="setAnalysisMode('portfolio')">📊 我的组合（全部）</button>
+      <button type="button" data-mode="symbol" onclick="setAnalysisMode('symbol')">🔍 单只标的</button>
+    </div>
+    <div id="symbolPick" style="display:none">
+      <select id="symbolSelect" class="input" onchange="onSymbolSelectChange()">
+        <option value="">— 从我的持仓中选择 —</option>
+      </select>
+      <input id="searchInput2" class="input" placeholder="或输入股票/基金名称、代码，如：贵州茅台、005827" />
+    </div>
+    <div style="margin-left:auto;display:flex;gap:10px">
+      <button class="btn btn-primary" id="runBtn" onclick="runCurrent()">⚡ 开始分析</button>
+      <button class="btn btn-ghost" onclick="runCurrent()">🔄 重新分析</button>
+    </div>
   </div>
-  <h1 class="hero" style="font-size:30px;margin:16px 0 8px">AI 投研全流程</h1>
-  <p style="color:var(--txt2);margin-bottom:24px">下方为模拟演示数据,展示多智能体协同分析的完整形态。</p>
+  <div id="symbolAnalysis">
+  <h1 class="hero" style="font-size:30px;margin:16px 0 8px">AI 投研全流程（单只标的）</h1>
+  <p style="color:var(--txt2);margin-bottom:24px">单只标的六阶段分析：真实行情数据（腾讯财经 / 东方财富）+ DeepSeek 投研委员会多空辩论。</p>
 
   <!-- progress stepper -->
   <div class="card" style="margin-bottom:24px">
@@ -505,6 +531,40 @@
 
   <div style="text-align:center;margin-top:36px">
     <button class="btn btn-primary" style="padding:14px 32px;font-size:15px" onclick="toast('📄 已生成完整 PDF 研报(演示)')">📄 导出完整 PDF 研报</button>
+  </div>
+  </div><!-- /symbolAnalysis -->
+
+  <!-- ============ 组合诊断（portfolio mode） ============ -->
+  <div id="portfolioAnalysis" style="display:none">
+    <h1 class="hero" style="font-size:30px;margin:16px 0 8px">AI 组合诊断</h1>
+    <p style="color:var(--txt2);margin-bottom:24px" id="pfSub">基于你的全部持仓，AI 分析行业集中度、风险暴露与相关性，并给出再平衡建议。</p>
+
+    <div class="kpis" id="pfKpis">
+      <div class="kpi"><div class="lbl">总市值</div><div class="val" id="pfTotal">—</div><div class="sub" id="pfCost">成本 —</div></div>
+      <div class="kpi"><div class="lbl">累计收益</div><div class="val up" id="pfPnl">—</div><div class="sub up" id="pfPnlPct">—</div></div>
+      <div class="kpi"><div class="lbl">最大单一持仓</div><div class="val" id="pfTop1">—</div><div class="sub" id="pfTop1Name">—</div></div>
+      <div class="kpi"><div class="lbl">集中度 HHI</div><div class="val" id="pfHhi">—</div><div class="sub" id="pfConc">—</div></div>
+    </div>
+
+    <div class="grid g2" style="margin-top:22px">
+      <div class="card"><h3 style="margin-bottom:14px">🥧 行业配置分布</h3><div id="pfSectorChart" class="chart"></div></div>
+      <div class="card"><h3 style="margin-bottom:14px">📊 资产类型分布</h3><div id="pfTypeChart" class="chart"></div></div>
+    </div>
+
+    <div class="alert warn" id="pfAlert" style="margin-top:22px;display:none">
+      <div class="ic">⚠️</div><div><h4>集中度预警</h4><p id="pfAlertText">—</p></div>
+    </div>
+
+    <div class="card" style="margin-top:22px">
+      <h3 style="margin-bottom:14px">📋 持仓明细（按市值权重）</h3>
+      <div id="pfTableWrap"></div>
+    </div>
+
+    <div class="card" style="margin-top:22px">
+      <div class="sec-title"><span class="num">🤖</span><h2>AI 再平衡建议</h2><small>DeepSeek 投研委员会</small></div>
+      <div id="pfAiSummary" class="debate-feed" style="max-height:none"></div>
+      <div id="pfRebalance" style="margin-top:16px"></div>
+    </div>
   </div>
 </div>
 </section>
@@ -1276,9 +1336,17 @@ const ROLE_ICON={'技术派':{ic:'📐',bg:'rgba(77,141,255,.15)'},'价值派':{
   '资金派':{ic:'💰',bg:'rgba(160,113,255,.15)'},'风险派':{ic:'⚠️',bg:'rgba(255,77,79,.15)'}};
 
 let running=false;
-async function runPipeline(fast){
+let analysisMode='portfolio';
+
+async function runCurrent(fast){
+  if(analysisMode==='portfolio') return runPortfolioAnalysis(fast);
+  return runSymbolAnalysis(fast);
+}
+
+async function runSymbolAnalysis(fast){
   if(running)return;running=true;
-  const query=(document.getElementById('searchInput')?.value||'贵州茅台').trim();
+  const query=((document.getElementById('searchInput2')?.value)||(document.getElementById('searchInput')?.value)||'').trim();
+  if(!query){ running=false; toast('请输入股票/基金名称或代码，或在上方切换为「我的组合」','error'); return; }
   document.getElementById('targetName').textContent = query;
 
   const sp=document.getElementById('stepper');
@@ -1317,6 +1385,116 @@ async function runPipeline(fast){
     toast('⚠️ 后端未连接','error');
     AGENTS.forEach((_,i)=>{const el=document.getElementById('ast'+i);if(el)el.textContent='—';});
   }finally{running=false;}
+}
+
+/* ---------- 组合诊断（portfolio mode） ---------- */
+function setText(id,t){const el=document.getElementById(id);if(el)el.textContent=t;}
+function fmtMoney(x){
+  if(x==null) return '—';
+  const n=Number(x); if(!isFinite(n)) return '—';
+  const s=(n<0?'−':'')+'¥'+Math.abs(Math.round(n)).toLocaleString('zh-CN');
+  return s;
+}
+function setAnalysisMode(mode){
+  analysisMode=mode;
+  document.querySelectorAll('#modeSeg button').forEach(b=>b.classList.toggle('active',b.dataset.mode===mode));
+  const pick=document.getElementById('symbolPick');
+  const sym=document.getElementById('symbolAnalysis');
+  const port=document.getElementById('portfolioAnalysis');
+  if(mode==='symbol'){
+    pick.style.display='flex'; sym.style.display='block'; port.style.display='none';
+    loadPortfolioSilently(document.getElementById('symbolSelect'));
+  }else{
+    pick.style.display='none'; sym.style.display='none'; port.style.display='block';
+    document.getElementById('targetName').textContent='我的组合';
+  }
+}
+async function loadPortfolioSilently(sel){
+  try{
+    if(!state.portfolio || !state.portfolio.length){
+      const r=await api('GET','/api/portfolio'); state.portfolio=r.items||[];
+    }
+  }catch(_){}
+  if(!sel) return;
+  const cur=sel.value;
+  sel.innerHTML='<option value="">— 从我的持仓中选择 —</option>'+
+    (state.portfolio||[]).map(it=>`<option value="${it.name}">${it.name}${it.code?' ('+it.code+')':''} · ${it.type}</option>`).join('');
+  sel.value=cur;
+}
+function onSymbolSelectChange(){
+  const sel=document.getElementById('symbolSelect');
+  const inp=document.getElementById('searchInput2');
+  if(sel && inp && sel.value) inp.value=sel.value;
+}
+async function runPortfolioAnalysis(fast){
+  if(running)return; running=true;
+  document.getElementById('targetName').textContent='我的组合';
+  toast('🚀 正在诊断你的组合…');
+  try{
+    const data=await api('POST','/api/portfolio/analyze',{fast:!!fast});
+    renderPortfolioDiagnosis(data);
+    toast('✅ 组合诊断完成','success');
+  }catch(err){
+    toast('⚠️ '+err.message,'error');
+  }finally{ running=false; }
+}
+function drawPie(id,dataArr){
+  const c=C(id); if(!c)return;
+  const palette=[DOWN,GOLD,BLUE,CYAN,PURPLE,'#6b7c9c'];
+  c.setOption({
+    tooltip:{trigger:'item',formatter:'{b}: {d}%'},
+    legend:{bottom:0,textStyle:{color:'#9fb0cc'}},
+    series:[{type:'pie',radius:['42%','68%'],center:['50%','44%'],
+      itemStyle:{borderColor:'#131a2b',borderWidth:3},
+      label:{color:'#e7edf7',formatter:'{b}\n{d}%'},
+      data:dataArr.map((d,i)=>({value:Math.round(d.value),name:d.name,itemStyle:{color:palette[i%palette.length]}}))}]
+  });
+}
+function renderPortfolioDiagnosis(data){
+  const d=data.diagnosis||{};
+  document.getElementById('targetName').textContent=(d.name||'我的组合')+`（${d.holdings_count||0} 只持仓）`;
+  setText('pfTotal', fmtMoney(d.total_market));
+  setText('pfCost', '成本 '+fmtMoney(d.total_cost));
+  const pnlEl=document.getElementById('pfPnl'); if(pnlEl){pnlEl.textContent=fmtMoney(d.total_pnl); pnlEl.className='val '+(d.total_pnl>=0?'up':'down');}
+  const pctEl=document.getElementById('pfPnlPct'); if(pctEl){pctEl.textContent=(d.total_pnl_pct>=0?'+':'')+d.total_pnl_pct+'%'; pctEl.className='sub '+(d.total_pnl_pct>=0?'up':'down');}
+  setText('pfTop1', (d.top1?d.top1.weight:'—')+(d.top1?'%':''));
+  setText('pfTop1Name', d.top1?d.top1.name:'—');
+  setText('pfHhi', d.hhi!=null?d.hhi:'—');
+  setText('pfConc', d.risk_level?('风险 '+d.risk_level+'/5'):'—');
+  drawPie('pfSectorChart', d.sector_alloc||[]);
+  drawPie('pfTypeChart', d.type_alloc||[]);
+  const alert=document.getElementById('pfAlert');
+  const top1w=d.top1?d.top1.weight:0;
+  if(top1w>=25 || (d.max_sector&&d.max_sector.pct>=35)){ alert.style.display='flex'; setText('pfAlertText',(d.warnings||[]).join(' ')); }
+  else alert.style.display='none';
+  const rows=(d.holdings||[]).map((h,i)=>`<tr>
+     <td>${i+1}</td>
+     <td><b>${h.name}</b><br><span style="color:var(--txt3);font-size:12px">${h.code||''}</span></td>
+     <td>${h.type}</td><td>${h.sector}</td>
+     <td>${h.weight}%</td><td>${fmtMoney(h.market_value)}</td>
+     <td class="${h.pnl_pct>=0?'up':'down'}">${(h.pnl_pct>=0?'+':'')+h.pnl_pct}%</td></tr>`).join('');
+  document.getElementById('pfTableWrap').innerHTML=`<table style="width:100%;border-collapse:collapse;font-size:13.5px">
+    <thead><tr style="color:var(--txt3);text-align:left"><th style="padding:8px 6px">#</th><th style="padding:8px 6px">名称</th><th style="padding:8px 6px">类型</th><th style="padding:8px 6px">行业</th><th style="padding:8px 6px">权重</th><th style="padding:8px 6px">市值</th><th style="padding:8px 6px">收益</th></tr></thead>
+    <tbody>${rows}</tbody></table>`;
+  const com=data.committee||{};
+  const feed=document.getElementById('pfAiSummary');
+  feed.innerHTML='';
+  if(com.summary){
+    const el=document.createElement('div'); el.className='msg';
+    el.innerHTML=`<div class="av" style="background:linear-gradient(135deg,#4d8dff,#a071ff)">🤖</div>
+      <div class="body"><div class="role">AI 组合顾问<span class="stance s-hold">诊断</span></div>
+      <div class="txt">${com.summary}</div></div>`;
+    feed.appendChild(el);
+  }
+  const rb=com.rebalance||[];
+  if(rb.length){
+    document.getElementById('pfRebalance').innerHTML='<div style="display:flex;flex-direction:column;gap:10px">'+rb.map(r=>{
+      const color=r.action==='减配'?'var(--down)':r.action==='增配'?'var(--up)':'var(--gold)';
+      return `<div class="plan-row"><span class="k" style="color:${color}">${r.action} · ${r.target}</span><span class="v">${r.detail||''}</span></div>`;
+    }).join('')+'</div>'+(com.portfolio_tip?`<div style="margin-top:12px;font-size:13px;color:var(--txt2)"><b>配置建议：</b>${com.portfolio_tip}</div>`:'');
+  }else{
+    document.getElementById('pfRebalance').innerHTML=`<div style="font-size:13px;color:var(--txt2)">${(d.warnings||[]).join(' ')}</div>`;
+  }
 }
 
 function renderReal(data,fast){
@@ -1487,6 +1665,7 @@ window.addEventListener('resize',()=>{Object.values(charts).forEach(c=>c&&c.resi
 const _go=go;
 window.go=function(id){_go(id);setTimeout(()=>{
   if(id==='portfolio'){loadPortfolio();}
+  if(id==='analysis'){setAnalysisMode(analysisMode);}
   if(id==='review'||id==='coach')drawReviewCoach();
   Object.values(charts).forEach(c=>c&&c.resize());
 },60);};

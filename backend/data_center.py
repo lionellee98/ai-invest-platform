@@ -518,5 +518,110 @@ def _fmt_money(x):
     return f"{v:+.0f}"
 
 
+# ------------------------------------------------------------ 组合诊断
+def analyze_portfolio(items):
+    """基于用户「我的组合」持仓，计算组合层面的集中度 / 风险暴露 / 再平衡依据。
+    items: 来自 users.get_portfolio 的 items（含 market_value / pnl / pnl_pct / sector / type 等）。
+    """
+    items = [it for it in (items or [])]
+    enriched = []
+    for it in items:
+        try:
+            mv = float(it.get("market_value", 0) or 0)
+            cv = float(it.get("cost_value", 0) or 0)
+            pnl = float(it.get("pnl", 0) or 0)
+            pnl_pct = float(it.get("pnl_pct", 0) or 0)
+        except Exception:
+            continue
+        enriched.append({
+            "id": it.get("id"), "name": it.get("name", "未命名"),
+            "code": it.get("code", ""), "type": it.get("type", "股票"),
+            "sector": it.get("sector", "其他"),
+            "market_value": round(mv, 2), "cost_value": round(cv, 2),
+            "pnl": round(pnl, 2), "pnl_pct": round(pnl_pct, 2),
+        })
+    if not enriched:
+        return {"ok": False, "error": "组合暂无持仓，请先在「我的组合」中添加持仓后再诊断。"}
+
+    total_market = sum(e["market_value"] for e in enriched)
+    total_cost = sum(e["cost_value"] for e in enriched)
+    if total_market <= 0:
+        return {"ok": False, "error": "组合持仓市值为 0，请先补全持仓的现价/净值。"}
+
+    for e in enriched:
+        e["weight"] = round(e["market_value"] / total_market * 100, 2)
+    enriched.sort(key=lambda x: -x["weight"])
+
+    # 行业 / 类型分布
+    sector_map, type_map = {}, {}
+    for e in enriched:
+        sector_map[e["sector"]] = sector_map.get(e["sector"], 0) + e["market_value"]
+        type_map[e["type"]] = type_map.get(e["type"], 0) + e["market_value"]
+    sector_alloc = [{"name": k, "value": round(v, 2),
+                     "pct": round(v / total_market * 100, 2)}
+                    for k, v in sorted(sector_map.items(), key=lambda x: -x[1])]
+    type_alloc = [{"name": k, "value": round(v, 2),
+                   "pct": round(v / total_market * 100, 2)}
+                  for k, v in sorted(type_map.items(), key=lambda x: -x[1])]
+
+    # 集中度
+    top1 = enriched[0]
+    top3_w = round(sum(e["weight"] for e in enriched[:3]), 2)
+    hhi = round(sum((e["weight"] / 100) ** 2 for e in enriched) * 10000, 1)  # 0-10000
+    max_sector = sector_alloc[0] if sector_alloc else {"name": "—", "pct": 0}
+    best = max(enriched, key=lambda x: x["pnl_pct"])
+    worst = min(enriched, key=lambda x: x["pnl_pct"])
+    total_pnl = round(total_market - total_cost, 2)
+    total_pnl_pct = round(total_pnl / total_cost * 100, 2) if total_cost else 0.0
+
+    # 风险等级 + 预警（确定性规则）
+    warnings = []
+    if top1["weight"] >= 40:
+        warnings.append(f"单一持仓「{top1['name']}」占比 {top1['weight']}%，集中度过高，建议适度减配。")
+    elif top1["weight"] >= 25:
+        warnings.append(f"单一持仓「{top1['name']}」占比 {top1['weight']}%，略偏高。")
+    if max_sector["pct"] >= 40:
+        warnings.append(f"行业「{max_sector['name']}」占比 {max_sector['pct']}%，行业集中风险显著。")
+    if len(enriched) < 3:
+        warnings.append(f"持仓仅 {len(enriched)} 只，分散度不足，建议增加不相关资产。")
+    if not warnings:
+        warnings.append("组合分散度良好，无明显集中度风险。")
+
+    if top1["weight"] >= 40 or max_sector["pct"] >= 50 or top3_w >= 70:
+        risk_level = 5
+    elif top1["weight"] >= 25 or max_sector["pct"] >= 35 or top3_w >= 55:
+        risk_level = 4
+    elif top1["weight"] >= 15 or max_sector["pct"] >= 25:
+        risk_level = 3
+    else:
+        risk_level = 2
+
+    rebalance_hint = []
+    for e in enriched:
+        if e["weight"] >= 35:
+            rebalance_hint.append(f"减配 {e['name']} 至 ≤25%")
+        elif e["weight"] <= 5 and len(enriched) and len(enriched) >= 6:
+            rebalance_hint.append(f"可小幅增配 {e['name']} 提升参与度")
+    if max_sector["pct"] >= 40:
+        rebalance_hint.append(f"行业「{max_sector['name']}」减配至 ≤30%")
+
+    return {
+        "ok": True, "name": "我的组合", "holdings_count": len(enriched),
+        "total_market": round(total_market, 2), "total_cost": round(total_cost, 2),
+        "total_pnl": total_pnl, "total_pnl_pct": total_pnl_pct,
+        "top1": {"name": top1["name"], "code": top1["code"], "weight": top1["weight"]},
+        "top3_weight": top3_w, "hhi": hhi,
+        "max_sector": {"name": max_sector["name"], "pct": max_sector["pct"]},
+        "best": {"name": best["name"], "pnl_pct": best["pnl_pct"]},
+        "worst": {"name": worst["name"], "pnl_pct": worst["pnl_pct"]},
+        "risk_level": risk_level,
+        "sector_alloc": sector_alloc, "type_alloc": type_alloc,
+        "holdings": enriched,
+        "warnings": warnings, "rebalance_hint": rebalance_hint,
+        "source": "用户持仓（来自「我的组合」）",
+        "updated_at": _dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    }
+
+
 if __name__ == "__main__":
     print(json.dumps(collect_all("贵州茅台"), ensure_ascii=False, indent=2))
