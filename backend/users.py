@@ -114,8 +114,15 @@ def _default_portfolio_items():
 def get_portfolio(username: str) -> dict:
     db = _load()
     pf = db["portfolios"].get(username)
-    if not pf or not pf.get("items"):
-        pf = {"items": _default_portfolio_items()}
+    if pf is None:
+        # 仅在该用户「完全没有组合记录」时初始化一次。
+        # demo 账户预置示例持仓以便体验；其余账户从空组合开始。
+        # 关键：用户主动清空持仓后 pf 已存在且 items 为空，不会再次填充，
+        # 从而杜绝「删空即复活」的问题。
+        if username == "demo":
+            pf = {"items": _default_portfolio_items()}
+        else:
+            pf = {"items": []}
         db["portfolios"][username] = pf
         _save(db)
     return {"ok": True, "items": pf["items"]}
