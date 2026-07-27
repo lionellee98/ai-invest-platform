@@ -529,16 +529,22 @@ def analyze_portfolio(items):
         try:
             mv = float(it.get("market_value", 0) or 0)
             cv = float(it.get("cost_value", 0) or 0)
-            pnl = float(it.get("pnl", 0) or 0)
-            pnl_pct = float(it.get("pnl_pct", 0) or 0)
+            qty = float(it.get("quantity", 0) or 0)
+            price = float(it.get("price", 0) or 0)
         except Exception:
             continue
+        # 没有实时市值时，回退到成本市值，保证组合仍可诊断
+        if mv <= 0:
+            mv = cv if cv > 0 else (round(qty * price, 2) if (qty and price) else 0)
+        has_price = float(it.get("market_value", 0) or 0) > 0
+        pnl = round(mv - cv, 2) if cv > 0 else 0.0
+        pnl_pct = round((mv - cv) / cv * 100, 2) if cv > 0 else 0.0
         enriched.append({
             "id": it.get("id"), "name": it.get("name", "未命名"),
             "code": it.get("code", ""), "type": it.get("type", "股票"),
             "sector": it.get("sector", "其他"),
             "market_value": round(mv, 2), "cost_value": round(cv, 2),
-            "pnl": round(pnl, 2), "pnl_pct": round(pnl_pct, 2),
+            "pnl": pnl, "pnl_pct": pnl_pct, "has_price": has_price,
         })
     if not enriched:
         return {"ok": False, "error": "组合暂无持仓，请先在「我的组合」中添加持仓后再诊断。"}
@@ -546,7 +552,7 @@ def analyze_portfolio(items):
     total_market = sum(e["market_value"] for e in enriched)
     total_cost = sum(e["cost_value"] for e in enriched)
     if total_market <= 0:
-        return {"ok": False, "error": "组合持仓市值为 0，请先补全持仓的现价/净值。"}
+        return {"ok": False, "error": "组合持仓缺少数量/成本，无法计算规模，请补全持仓信息。"}
 
     for e in enriched:
         e["weight"] = round(e["market_value"] / total_market * 100, 2)
